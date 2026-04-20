@@ -18,11 +18,11 @@ MODEL_IDS = {
     "mistral": "mistralai/Mistral-7B-Instruct-v0.1",
 }
 
-# yes/no appears first in the output — 20 tokens is enough for all models
+# yes/no is always the first generated token — 5 is a safe ceiling
 _MAX_NEW_TOKENS = {
-    "granite": 20,
-    "llama":   20,
-    "mistral": 20,
+    "granite": 5,
+    "llama":   5,
+    "mistral": 5,
 }
 
 
@@ -53,8 +53,8 @@ def detect_device() -> tuple[str, object, torch.dtype, int]:
 
     if torch.backends.mps.is_available():
         # Apple Silicon unified memory — bfloat16 is well-supported on M-series
-        # Use a conservative default; 32 is safe for 8B models on ≥24 GB unified RAM
-        batch = 32
+        # 64 is safe for 8B models; ~50 GB free after model load on a 64 GB system
+        batch = 64
         log.info(f"MPS device (Apple Silicon), dtype: bfloat16, batch: {batch}")
         return "mps", {"": "mps"}, torch.bfloat16, batch
 
@@ -84,7 +84,10 @@ def load_model(name: str, device_map, dtype):
     tokenizer.padding_side = "left"
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=dtype, device_map=device_map)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, torch_dtype=dtype, device_map=device_map,
+        attn_implementation="sdpa",
+    )
     log.info(f"[{name}] Loaded on {next(model.parameters()).device}")
     return model, tokenizer
 
@@ -109,6 +112,7 @@ def _batch_generate(texts: list[str], model, tokenizer, name: str) -> list[str]:
         for m in messages
     ]
     inputs = tokenizer(chats, return_tensors="pt", padding=True).to(model.device)
+    input_len = inputs["input_ids"].shape[1]
     with torch.inference_mode():
         outputs = model.generate(
             **inputs,
@@ -117,42 +121,30 @@ def _batch_generate(texts: list[str], model, tokenizer, name: str) -> list[str]:
             max_new_tokens=_MAX_NEW_TOKENS[name],
             pad_token_id=tokenizer.pad_token_id,
         )
-    return tokenizer.batch_decode(outputs, skip_special_tokens=False)
+    # Decode only the newly generated tokens — avoids re-processing the full input.
+    new_tokens = outputs[:, input_len:]
+    return tokenizer.batch_decode(new_tokens, skip_special_tokens=True)
 
 
-def run_granite_batch(texts: list[str], model, tokenizer) -> list[str]:
-    decoded_list = _batch_generate(texts, model, tokenizer, "granite")
+def _parse_yes_no(decoded_list: list[str]) -> list[str]:
+    """Extract yes/no from decoded new-token strings."""
     results = []
     for decoded in decoded_list:
-        m = re.search(r'<\|end_of_role\|>\s*(yes|no)\b', decoded, re.IGNORECASE)
+        m = re.search(r'\b(yes|no)\b', decoded, re.IGNORECASE)
         results.append(m.group(1).lower() if m else "improper output")
     return results
 
 
+def run_granite_batch(texts: list[str], model, tokenizer) -> list[str]:
+    return _parse_yes_no(_batch_generate(texts, model, tokenizer, "granite"))
+
+
 def run_llama_batch(texts: list[str], model, tokenizer) -> list[str]:
-    decoded_list = _batch_generate(texts, model, tokenizer, "llama")
-    results = []
-    for decoded in decoded_list:
-        split = re.search(
-            r'(?<=<\|start_header_id\|>assistant<\|end_header_id\|>\n\n)(.*)',
-            decoded, re.IGNORECASE,
-        )
-        if split:
-            m = re.search(r'\b(yes|no)\b', split.group(0), re.IGNORECASE)
-            if m:
-                results.append(m.group(0).lower())
-                continue
-        results.append("improper output")
-    return results
+    return _parse_yes_no(_batch_generate(texts, model, tokenizer, "llama"))
 
 
 def run_mistral_batch(texts: list[str], model, tokenizer) -> list[str]:
-    decoded_list = _batch_generate(texts, model, tokenizer, "mistral")
-    results = []
-    for decoded in decoded_list:
-        m = re.search(r'\[/INST](.*?)(\b(yes|no)\b)', decoded, re.IGNORECASE)
-        results.append(m.group(3).lower() if m else "improper output")
-    return results
+    return _parse_yes_no(_batch_generate(texts, model, tokenizer, "mistral"))
 
 
 RUNNERS = {

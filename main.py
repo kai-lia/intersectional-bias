@@ -142,6 +142,8 @@ for model_name in active_models:
         (row, style) for row, style in work
         if (row["stigma1"], _s2(row["stigma2"]), row["stigma_col"], style, model_name) not in completed_keys
     ]
+    # Sort by prompt length so each batch has similar-length sequences — reduces padding waste.
+    pending.sort(key=lambda item: len(item[0][item[1]]))
     if not pending:
         log.info(f"[{model_name}] All prompts done — skipping.")
         continue
