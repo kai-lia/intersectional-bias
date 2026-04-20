@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 import sys
@@ -10,6 +11,27 @@ from huggingface_hub import login
 # ── Config ────────────────────────────────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config.settings import MODELS, STIGMA_COLS, STIGMA_COL_SLUGS, PROMPT_STYLES, BATCH_SIZE, CSV_FLUSH_EVERY
+
+# ── Args (override config/settings.py) ───────────────────────────────────────
+_parser = argparse.ArgumentParser(description="Run intersectional bias benchmarking.")
+_parser.add_argument("--models",  nargs="+", choices=list(MODELS.keys()),
+                     help="Models to run (default: all enabled in settings.py)")
+_parser.add_argument("--cols",    nargs="+", choices=list(STIGMA_COLS.keys()),
+                     help="Stigma columns to use (default: all enabled in settings.py)")
+_parser.add_argument("--styles",  nargs="+", choices=list(PROMPT_STYLES.keys()),
+                     help="Prompt styles to use (default: all enabled in settings.py)")
+_parser.add_argument("--batch-size", type=int, default=None,
+                     help=f"Batch size (default: {BATCH_SIZE} from settings.py)")
+_args = _parser.parse_args()
+
+if _args.models:
+    MODELS     = {k: (k in _args.models)     for k in MODELS}
+if _args.cols:
+    STIGMA_COLS = {k: (k in _args.cols)      for k in STIGMA_COLS}
+if _args.styles:
+    PROMPT_STYLES = {k: (k in _args.styles)  for k in PROMPT_STYLES}
+if _args.batch_size:
+    BATCH_SIZE = _args.batch_size
 
 # ── Pipeline modules ──────────────────────────────────────────────────────────
 from pipeline.combined_stigmas import run as build_combined_stigmas
