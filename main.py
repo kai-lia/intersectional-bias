@@ -6,7 +6,10 @@ import traceback
 from pathlib import Path
 
 import pandas as pd
+from dotenv import load_dotenv
 from huggingface_hub import login
+
+load_dotenv()
 
 # ── Config ────────────────────────────────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).resolve().parent))
