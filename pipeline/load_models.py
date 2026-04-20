@@ -1,9 +1,14 @@
+import gc
 import logging
+import os
 import re
 import sys
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# Allow ops not yet implemented on MPS to fall back to CPU silently.
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 log = logging.getLogger(__name__)
 
@@ -23,16 +28,35 @@ _MAX_NEW_TOKENS = {
 
 # ── Device detection ──────────────────────────────────────────────────────────
 
-def detect_device() -> tuple[str, object, torch.dtype]:
+def _cuda_batch_size(vram_gb: float) -> int:
+    """Recommend batch size based on available VRAM for ~7-8B models."""
+    if vram_gb >= 80:
+        return 64
+    if vram_gb >= 40:
+        return 32
+    if vram_gb >= 24:
+        return 16
+    return 8
+
+
+def detect_device() -> tuple[str, object, torch.dtype, int]:
+    """Return (device_str, device_map, dtype, recommended_batch_size)."""
     if torch.cuda.is_available():
-        name = torch.cuda.get_device_name(0)
-        vram = torch.cuda.get_device_properties(0).total_memory / 1e9
-        log.info(f"CUDA device: {name}, VRAM: {vram:.1f} GB")
-        return "cuda", "auto", torch.float16
+        props = torch.cuda.get_device_properties(0)
+        name  = props.name
+        vram  = props.total_memory / 1e9
+        # bfloat16 is preferred on Ampere (sm_80) and newer; fall back to float16
+        dtype = torch.bfloat16 if props.major >= 8 else torch.float16
+        batch = _cuda_batch_size(vram)
+        log.info(f"CUDA device: {name}, VRAM: {vram:.1f} GB, dtype: {dtype}, batch: {batch}")
+        return "cuda", "auto", dtype, batch
 
     if torch.backends.mps.is_available():
-        log.info("MPS device available (Apple Silicon).")
-        return "mps", {"": "mps"}, torch.float16
+        # Apple Silicon unified memory — bfloat16 is well-supported on M-series
+        # Use a conservative default; 32 is safe for 8B models on ≥24 GB unified RAM
+        batch = 32
+        log.info(f"MPS device (Apple Silicon), dtype: bfloat16, batch: {batch}")
+        return "mps", {"": "mps"}, torch.bfloat16, batch
 
     if torch.version.cuda is None:
         log.error("PyTorch installed without CUDA. Reinstall with CUDA wheels.")
@@ -68,6 +92,7 @@ def load_model(name: str, device_map, dtype):
 def unload_model(name: str, model, tokenizer, device: str) -> None:
     log.info(f"[{name}] Unloading model")
     del model, tokenizer
+    gc.collect()
     if device == "cuda":
         torch.cuda.empty_cache()
     elif device == "mps":
@@ -84,7 +109,7 @@ def _batch_generate(texts: list[str], model, tokenizer, name: str) -> list[str]:
         for m in messages
     ]
     inputs = tokenizer(chats, return_tensors="pt", padding=True).to(model.device)
-    with torch.no_grad():
+    with torch.inference_mode():
         outputs = model.generate(
             **inputs,
             do_sample=True,

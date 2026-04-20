@@ -37,10 +37,5 @@ PROMPT_STYLES = {
 }
 
 # ── Performance ───────────────────────────────────────────────────────────────
-# Number of prompts passed to model.generate() at once.
-# Higher = faster GPU utilization; lower = safer on small VRAM.
-# Start at 8; double until you hit OOM, then step back.
-BATCH_SIZE = 8
-
 # Rows to accumulate before flushing to CSV (reduces I/O overhead).
 CSV_FLUSH_EVERY = 50

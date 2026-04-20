@@ -10,7 +10,7 @@ from huggingface_hub import login
 
 # ── Config ────────────────────────────────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config.settings import MODELS, STIGMA_COLS, STIGMA_COL_SLUGS, PROMPT_STYLES, BATCH_SIZE, CSV_FLUSH_EVERY
+from config.settings import MODELS, STIGMA_COLS, STIGMA_COL_SLUGS, PROMPT_STYLES, CSV_FLUSH_EVERY
 
 # ── Args (override config/settings.py) ───────────────────────────────────────
 _parser = argparse.ArgumentParser(description="Run intersectional bias benchmarking.")
@@ -21,7 +21,7 @@ _parser.add_argument("--cols",    nargs="+", choices=list(STIGMA_COLS.keys()),
 _parser.add_argument("--styles",  nargs="+", choices=list(PROMPT_STYLES.keys()),
                      help="Prompt styles to use (default: all enabled in settings.py)")
 _parser.add_argument("--batch-size", type=int, default=None,
-                     help=f"Batch size (default: {BATCH_SIZE} from settings.py)")
+                     help="Batch size override (default: auto-detected from hardware)")
 _args = _parser.parse_args()
 
 if _args.models:
@@ -30,8 +30,6 @@ if _args.cols:
     STIGMA_COLS = {k: (k in _args.cols)      for k in STIGMA_COLS}
 if _args.styles:
     PROMPT_STYLES = {k: (k in _args.styles)  for k in PROMPT_STYLES}
-if _args.batch_size:
-    BATCH_SIZE = _args.batch_size
 
 # ── Pipeline modules ──────────────────────────────────────────────────────────
 from pipeline.combined_stigmas import run as build_combined_stigmas
@@ -84,7 +82,7 @@ active_styles  = [s for s, on in PROMPT_STYLES.items() if on]
 log.info(f"Models:        {active_models}")
 log.info(f"Stigma cols:   {active_cols}")
 log.info(f"Prompt styles: {active_styles}")
-log.info(f"Batch size:    {BATCH_SIZE}")
+log.info(f"Batch size:    (auto-detect — see device log)")
 
 # ── Step 3: Build all prompt rows across active stigma columns ────────────────
 all_rows = []
@@ -94,7 +92,11 @@ for col in active_cols:
 log.info(f"Total prompt rows (pre-style filter): {len(all_rows)}")
 
 # ── Step 4: Device detection ──────────────────────────────────────────────────
-DEVICE, DEVICE_MAP, DTYPE = detect_device()
+DEVICE, DEVICE_MAP, DTYPE, _REC_BATCH = detect_device()
+
+# Effective batch size: CLI arg overrides hardware recommendation
+EFFECTIVE_BATCH = _args.batch_size or _REC_BATCH
+log.info(f"Effective batch size: {EFFECTIVE_BATCH}  (device={DEVICE})")
 
 # ── Step 5: Checkpointing ─────────────────────────────────────────────────────
 completed_keys: set = set()
@@ -157,7 +159,7 @@ for model_name in active_models:
         csv_buffer.clear()
 
     with open(OUTPUT_CSV, "a", newline="") as f:
-        for batch in _chunks(pending, BATCH_SIZE):
+        for batch in _chunks(pending, EFFECTIVE_BATCH):
             texts  = [row[style] for row, style in batch]
             metas  = [(row, style) for row, style in batch]
 
