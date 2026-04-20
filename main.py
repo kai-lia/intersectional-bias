@@ -150,7 +150,7 @@ for model_name in active_models:
     csv_buffer: list[dict] = []
 
     def flush_buffer(f):
-        nonlocal write_header
+        global write_header
         if not csv_buffer:
             return
         pd.DataFrame(csv_buffer).to_csv(f, header=write_header, index=False)
