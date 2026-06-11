@@ -9,7 +9,7 @@ COMBINED_PATH   = str(_ROOT / "data/templates/combined_neostigmas.csv")
 _ANSWER_SWAP = ("Answer with yes/no/can't tell", "Answer first only with yes or no, then provide your reasoning")
 
 
-# ── template helpers ──────────────────────────────────────────────────────────
+#help ers
 
 def _apply_swap(text: str) -> str:
     return text.replace(_ANSWER_SWAP[0], _ANSWER_SWAP[1])
@@ -23,14 +23,14 @@ def load_stigmas(path: str = COMBINED_PATH) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
-# ── prompt construction ───────────────────────────────────────────────────────
+# prompt struct
 
 def make_prompts(pattern_row: pd.Series, stigma_phrase: str) -> dict:
     """
-    Fill a pattern template with a stigma phrase and return all prompt variants.
+    fill a pattern template with a stigma phrase and return all prompt variants
 
-    Returns a dict with keys: original, positive, doubt, base.
-    All keys share the same structure as intersectional_benchmarking.make_prompts.
+    return a dict with: original, positive, doubt, base
+    all keys share the same structure as intersectional_benchmarking.make_prompts
     """
     def _fill(template: str) -> str:
         return _apply_swap(str(template).replace("{stigma}", stigma_phrase))
@@ -49,8 +49,8 @@ def build_prompt_rows(
     col: str = "With Stigma",
 ) -> list[dict]:
     """
-    Cross patterns × stigma rows and return a flat list of dicts ready for
-    model inference. Each dict carries all four prompt variants plus metadata.
+    cross patterns, stigma rows and return a flat list of dicts
+    each dict carries all four prompt variants + other data
     """
     patterns = load_patterns(patterns_path)
     stigmas  = load_stigmas(stigmas_path)

@@ -7,7 +7,7 @@ import sys
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Allow ops not yet implemented on MPS to fall back to CPU silently.
+# allow ops not yet implemented on MPS to fall back to CPU
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 log = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ MODEL_IDS = {
     "mistral": "mistralai/Mistral-7B-Instruct-v0.1",
 }
 
-# yes/no is always the first generated token — 5 is a safe ceiling
+# yes/no is always the first generated token, grabbing 5
 _MAX_NEW_TOKENS = {
     "granite": 5,
     "llama":   5,
@@ -26,7 +26,7 @@ _MAX_NEW_TOKENS = {
 }
 
 
-# ── Device detection ──────────────────────────────────────────────────────────
+# device
 
 def _cuda_batch_size(vram_gb: float) -> int:
     """Recommend batch size based on available VRAM for ~7-8B models."""
@@ -40,7 +40,7 @@ def _cuda_batch_size(vram_gb: float) -> int:
 
 
 def detect_device() -> tuple[str, object, torch.dtype, int]:
-    """Return (device_str, device_map, dtype, recommended_batch_size)."""
+    """return (device_str, device_map, dtype, recommended_batch_size)."""
     if torch.cuda.is_available():
         props = torch.cuda.get_device_properties(0)
         name  = props.name
@@ -52,7 +52,7 @@ def detect_device() -> tuple[str, object, torch.dtype, int]:
         return "cuda", "auto", dtype, batch
 
     if torch.backends.mps.is_available():
-        # Apple Silicon unified memory — bfloat16 is well-supported on M-series
+        # Apple Silicon unified memory bfloat16 is well-supported on M-series
         # 64 is safe for 8B models; ~50 GB free after model load on a 64 GB system
         batch = 64
         log.info(f"MPS device (Apple Silicon), dtype: bfloat16, batch: {batch}")
@@ -73,14 +73,11 @@ def mem_used(device: str) -> str:
         return f"{torch.mps.current_allocated_memory() / 1e9:.2f} GB"
     return "N/A"
 
-
-# ── Loader / unloader ─────────────────────────────────────────────────────────
-
 def load_model(name: str, device_map, dtype):
     model_id = MODEL_IDS[name]
     log.info(f"[{name}] Loading {model_id}")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
-    # left-pad so batches of different lengths generate correctly
+    # left pad so batches of different lengths generate correctly
     tokenizer.padding_side = "left"
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -102,7 +99,7 @@ def unload_model(name: str, model, tokenizer, device: str) -> None:
         torch.mps.empty_cache()
 
 
-# ── Batch runner functions ────────────────────────────────────────────────────
+
 # Each takes a list of prompt strings and returns a list of answers.
 
 def _batch_generate(texts: list[str], model, tokenizer, name: str) -> list[str]:
@@ -116,18 +113,19 @@ def _batch_generate(texts: list[str], model, tokenizer, name: str) -> list[str]:
     with torch.inference_mode():
         outputs = model.generate(
             **inputs,
-            do_sample=True,
-            temperature=0.1,
+            do_sample=False, # determanistic
+            temperature=0, # greedy
             max_new_tokens=_MAX_NEW_TOKENS[name],
             pad_token_id=tokenizer.pad_token_id,
         )
-    # Decode only the newly generated tokens — avoids re-processing the full input.
+    # decode only the new tokens
+    # avoid reprocesssing the full input
     new_tokens = outputs[:, input_len:]
     return tokenizer.batch_decode(new_tokens, skip_special_tokens=True)
 
 
 def _parse_yes_no(decoded_list: list[str]) -> list[str]:
-    """Extract yes/no from decoded new-token strings."""
+    """extract yes/no from decoded new-token strings"""
     results = []
     for decoded in decoded_list:
         m = re.search(r'\b(yes|no)\b', decoded, re.IGNORECASE)

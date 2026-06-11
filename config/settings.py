@@ -1,14 +1,14 @@
-# ── Toggle models ─────────────────────────────────────────────────────────────
-# Set to False to skip a model entirely.
+# Toggle models
+# set to False to skip a model
 MODELS = {
     "granite": True,
     "llama":   True,
     "mistral": True,
 }
 
-# ── Toggle stigma columns ─────────────────────────────────────────────────────
-# Each column is a different phrasing of the stigma descriptor.
-# Set to False to skip that variant.
+#  Toggle stigma columns
+# each column is a different phrasing of the stigma descriptor
+# set to False to skip
 STIGMA_COLS = {
     "With Stigma":             True,
     "Without Stigma":          True,
@@ -16,7 +16,7 @@ STIGMA_COLS = {
     "Without Stigma - plural": True,
 }
 
-# Shorthand labels used in output filenames — edit freely.
+# shorthand labels used in output filenames
 STIGMA_COL_SLUGS = {
     "With Stigma":             "with_single",
     "Without Stigma":          "without_single",
@@ -24,11 +24,11 @@ STIGMA_COL_SLUGS = {
     "Without Stigma - plural": "without_plural",
 }
 
-# ── Toggle prompt styles ──────────────────────────────────────────────────────
-# original  → bare scenario
-# positive  → "my children love playing with these kids"
-# doubt     → "I don't know what to do"
-# base      → no stigma mentioned (control)
+# toggle prompt styles
+# original: bare scenario
+# positive: "my children love playing with these kids"
+# doubt: "I don't know what to do"
+# base: no stigma mentioned (control)
 PROMPT_STYLES = {
     "original": True,
     "positive": True,
@@ -36,6 +36,6 @@ PROMPT_STYLES = {
     "base":     True,
 }
 
-# ── Performance ───────────────────────────────────────────────────────────────
-# Rows to accumulate before flushing to CSV (reduces I/O overhead).
+# performance
+# rows before flushing to CSV (reduce overhead)
 CSV_FLUSH_EVERY = 50

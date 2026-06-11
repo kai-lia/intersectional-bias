@@ -2,6 +2,10 @@ import re
 from pathlib import Path
 import pandas as pd
 
+"""originally the templates are made for single stigma, 
+creating grammatically correct verson for 2 stigmas
+"""
+
 COLS = ["Stigma", "With Stigma", "Without Stigma", "With Stigma - plural", "Without Stigma - plural"]
 OUT_COLS = ["stigma1", "stigma2"] + COLS
 _ROOT = Path(__file__).resolve().parent.parent
@@ -19,7 +23,6 @@ _WITH_REPLACEMENT = {
     "Without Stigma - plural": "who do not have ",
     "Stigma": "",
 }
-
 
 def _normalize_row2(val: str, col: str) -> str:
     if _WITH.match(val):
