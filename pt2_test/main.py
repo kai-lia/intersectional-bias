@@ -60,6 +60,7 @@ def _matches_target(row) -> bool:
 
 # ── Output ────────────────────────────────────────────────────────────────────
 OUTPUT_CSV = ROOT / "data" / "results_pt2.csv"
+OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 token = os.getenv("HF_TOKEN")
