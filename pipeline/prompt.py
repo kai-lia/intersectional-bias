@@ -58,9 +58,10 @@ def build_prompt_rows(
     rows = []
     for _, stigma_row in stigmas.iterrows():
         stigma_phrase = str(stigma_row[col])
-        for _, pat_row in patterns.iterrows():
+        for pat_idx, pat_row in patterns.iterrows():
             prompts = make_prompts(pat_row, stigma_phrase)
             rows.append({
+                "pattern_id":   pat_idx,
                 "stigma1":      stigma_row.get("stigma1", stigma_row["Stigma"]),
                 "stigma2":      stigma_row.get("stigma2"),
                 "stigma_col":   col,

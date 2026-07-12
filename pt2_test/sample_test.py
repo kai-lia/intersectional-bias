@@ -1,21 +1,5 @@
 """
-Minimal end-to-end smoke test: generate reasoning for exactly 3 prompts —
-Black, Female, Black+Female — using the same prompt-filling and generation
-path as main.py, just at a scale small enough to eyeball the output. Also
-extracts residual-stream activations for the same 3 prompts, using the same
-single-forward-pass logic as extract_activations.py — a cheap way to sanity
-check that logic before running it for real.
-
-"Female" is not in data/templates/neostigmas.csv (this project's taxonomy has
-no gender dimension) — it's defined locally below, phrased consistently with
-the existing sociodemographic entries (e.g. "who is Black", "who is Asian").
-This script does not touch neostigmas.csv / combined_neostigmas.csv.
-
-Run: python pt2_test/sample_test.py [--model granite|llama|mistral]
-Output:
-  printed to console
-  pt2_test/data/sample_test_results.csv       — text output (answer, reasoning)
-  pt2_test/data/sample_test_activations.npz   — B/F/BF arrays, shape (n_layers, d)
+small test
 """
 import argparse
 import logging
