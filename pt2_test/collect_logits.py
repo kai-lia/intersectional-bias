@@ -214,7 +214,7 @@ if not write_header:
     existing = pd.read_csv(OUTPUT_CSV)
     for _, r in existing.iterrows():
         completed_keys.add(
-            (r["stigma1"], _s2(r["stigma2"]), r["stigma_col"], r["prompt_style"], r["model"])
+            (r["pattern_id"], r["stigma1"], _s2(r["stigma2"]), r["stigma_col"], r["prompt_style"], r["model"])
         )
     log.info(f"Resuming — {len(completed_keys)} rows already done.")
 
@@ -235,7 +235,7 @@ def _chunks(lst, n):
 for model_name in active_models:
     pending = [
         (row, style) for row, style in work
-        if (row["stigma1"], _s2(row["stigma2"]), row["stigma_col"], style, model_name)
+        if (row["pattern_id"], row["stigma1"], _s2(row["stigma2"]), row["stigma_col"], style, model_name)
         not in completed_keys
     ]
     pending.sort(key=lambda item: len(item[0][item[1]]))
@@ -279,6 +279,7 @@ for model_name in active_models:
 
             for (row, style), logit_rec in zip(metas, batch_results):
                 csv_buffer.append({
+                    "pattern_id":    row["pattern_id"],
                     "stigma1":       row["stigma1"],
                     "stigma2":       row["stigma2"],
                     "stigma_col":    row["stigma_col"],
@@ -290,7 +291,7 @@ for model_name in active_models:
                     **logit_rec,
                 })
                 completed_keys.add(
-                    (row["stigma1"], _s2(row["stigma2"]), row["stigma_col"], style, model_name)
+                    (row["pattern_id"], row["stigma1"], _s2(row["stigma2"]), row["stigma_col"], style, model_name)
                 )
                 done += 1
 
