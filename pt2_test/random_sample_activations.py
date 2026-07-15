@@ -1,13 +1,23 @@
 """
-Extract residual-stream activations for a random sample of stigma-pair
-combinations (not just Black/Lesbian), to test whether the additive /
-non-additive pattern found for that one pair generalizes across many
-different identity/trait combinations.
+Extract residual-stream activations for ALL pairwise combinations of a fixed,
+deliberately chosen set of 15 identities (not a random sample) -- so the
+additivity generalization test runs on a specific, interpretable set of
+traits instead of whatever happens to land in a random draw from the full
+112-trait template list.
 
-Design: sample N_STIGMAS pairs (stigma1, stigma2) from
-data/templates/combined_neostigmas.csv, and N_PATTERNS patterns from
-patterns_list_yes_no.csv -- the SAME patterns are reused across every stigma
-pair, so scenario content is held fixed and only the identity varies.
+FIXED_IDENTITIES (15): Black, Asian, Muslim, Fundamentalist Christian, Autism
+Or Autism Spectrum Disorder, Using A Wheel Chair All The Time, Multiple Body
+Piercings, Criminal Record, Lesbian, Illiteracy, Was Raped Previously, Teen
+Parent Previously, Infertile, Short, Unattractive.
+
+Note: there is no incarceration-status trait in the template set -- "prison"
+is approximated by "Criminal Record", the closest available proxy. "Christian"
+maps to "Fundamentalist Christian" (only Christian-specific option available).
+
+All C(15,2) = 105 unordered pairs are used, both phrasing orders (210
+ordered pairs), across every available pattern by default -- the same
+patterns reused across every pair, so scenario content is held fixed and
+only the identity varies.
 
 Five conditions per (pair, pattern):
     ind1     = "who is <stigma1>"
@@ -19,7 +29,9 @@ Five conditions per (pair, pattern):
 
 combo12/combo21 phrasing is pulled directly from combined_neostigmas.csv
 (both orderings already exist as separate rows, correctly grammar-normalized
-by pipeline/combined_stigmas.py) rather than re-implemented here.
+by pipeline/combined_stigmas.py) rather than re-implemented here. ind1/ind2
+vectors are cached per (trait, pattern), since each of the 15 traits is
+reused across 14 different pairs.
 
 Output: pt2_test/data/activations_random/{model}_layer{N}.npz, same shape
 convention as extract_activations.py (condition -> (n_scenarios, d) array +
@@ -27,6 +39,7 @@ scenario_ids), with generic condition names so pt2_test/eval/additivity.py's
 logic applies with a key rename, not a rewrite.
 """
 import argparse
+import itertools
 import logging
 import os
 import sys
@@ -53,17 +66,19 @@ log = logging.getLogger(__name__)
 
 OUT_DIR = ROOT / "data" / "activations_random"
 
-N_STIGMAS  = 100
-N_PATTERNS = 3
-SEED       = 0
+FIXED_IDENTITIES = [
+    "Black", "Asian", "Muslim", "Fundamentalist Christian",
+    "Autism Or Autism Spectrum Disorder", "Using A Wheel Chair All The Time",
+    "Multiple Body Piercings", "Criminal Record", "Lesbian", "Illiteracy",
+    "Was Raped Previously", "Teen Parent Previously", "Infertile", "Short", "Unattractive",
+]
+SEED = 0
 
 CONDITIONS = ["ind1", "ind2", "combo12", "combo21", "base"]
 
 
-def sample_stigma_pairs(n: int, seed: int) -> pd.DataFrame:
-    df = pd.read_csv(COMBINED_PATH)
-    paired = df.dropna(subset=["stigma1", "stigma2"]).reset_index(drop=True)
-    return paired.sample(n=n, random_state=seed).reset_index(drop=True)
+def all_stigma_pairs() -> list[tuple[str, str]]:
+    return list(itertools.combinations(FIXED_IDENTITIES, 2))
 
 
 def mirror_phrase(df: pd.DataFrame, s1: str, s2: str) -> str:
@@ -98,8 +113,7 @@ def build_prompts(pattern_row: pd.Series, ind1_phrase: str, ind2_phrase: str,
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="granite", choices=["granite", "llama", "mistral"])
-    parser.add_argument("--n-stigmas", type=int, default=N_STIGMAS)
-    parser.add_argument("--n-patterns", type=int, default=N_PATTERNS)
+    parser.add_argument("--n-patterns", type=int, default=None, help="default: all available patterns")
     parser.add_argument("--seed", type=int, default=SEED)
     args = parser.parse_args()
 
@@ -110,9 +124,11 @@ def main():
     login(token)
 
     combined = pd.read_csv(COMBINED_PATH)
-    stigma_pairs = sample_stigma_pairs(args.n_stigmas, args.seed)
-    patterns = load_patterns(PATTERNS_YES_NO).sample(n=args.n_patterns, random_state=args.seed)
-    log.info(f"Sampled {len(stigma_pairs)} stigma pairs x {len(patterns)} patterns "
+    stigma_pairs = all_stigma_pairs()
+    patterns = load_patterns(PATTERNS_YES_NO)
+    if args.n_patterns:
+        patterns = patterns.sample(n=args.n_patterns, random_state=args.seed)
+    log.info(f"{len(FIXED_IDENTITIES)} fixed identities -> {len(stigma_pairs)} pairs x {len(patterns)} patterns "
              f"= {len(stigma_pairs) * len(patterns)} scenarios")
 
     device, device_map, dtype, _ = detect_device()
@@ -123,33 +139,32 @@ def main():
     activations = {layer: {c: [] for c in CONDITIONS} for layer in range(1, n_layers + 1)}
     scenario_ids = []
 
-    # base only depends on the pattern, not the stigma pair -- compute once
-    # per pattern and reuse across all sampled stigma pairs.
-    base_layer_vecs_by_pattern = {}
-    for pat_idx, pat_row in patterns.iterrows():
-        base_prompt = _apply_swap(str(pat_row["Base Case"]))
-        base_layer_vecs_by_pattern[pat_idx] = extract_activations(base_prompt, model, tokenizer)
-
     total = len(stigma_pairs) * len(patterns)
-    done, errors = 0, 0
-    for _, srow in stigma_pairs.iterrows():
-        s1, s2 = srow["stigma1"], srow["stigma2"]
-        try:
-            ind1_phrase = single_phrase(combined, s1)
-            ind2_phrase = single_phrase(combined, s2)
-            combo12_phrase = srow["With Stigma"]
-            combo21_phrase = mirror_phrase(combined, s1, s2)
-        except ValueError as exc:
-            log.warning(f"Skipping pair ({s1}, {s2}): {exc}")
-            errors += len(patterns)
-            continue
+    done = 0
+    for pat_idx, pat_row in patterns.iterrows():
+        # base and individual-trait vectors only depend on (trait, pattern),
+        # not on which pair is being evaluated -- cache per pattern, since
+        # each of the 15 traits is reused across 14 different pairs.
+        base_prompt = _apply_swap(str(pat_row["Base Case"]))
+        base_vecs = extract_activations(base_prompt, model, tokenizer)
 
-        for pat_idx, pat_row in patterns.iterrows():
-            prompts = build_prompts(pat_row, ind1_phrase, ind2_phrase, combo12_phrase, combo21_phrase)
+        ind_cache: dict = {}
+        for trait in FIXED_IDENTITIES:
+            phrase = single_phrase(combined, trait)
+            prompt = _apply_swap(str(pat_row["Pattern"]).replace("{stigma}", phrase))
+            ind_cache[trait] = extract_activations(prompt, model, tokenizer)
+
+        for s1, s2 in stigma_pairs:
+            combo12_phrase = combined[(combined.stigma1 == s1) & (combined.stigma2 == s2)].iloc[0]["With Stigma"]
+            combo21_phrase = mirror_phrase(combined, s1, s2)
+            combo12_prompt = _apply_swap(str(pat_row["Pattern"]).replace("{stigma}", combo12_phrase))
+            combo21_prompt = _apply_swap(str(pat_row["Pattern"]).replace("{stigma}", combo21_phrase))
+
             layer_vecs = {
-                c: (base_layer_vecs_by_pattern[pat_idx] if c == "base"
-                    else extract_activations(prompts[c], model, tokenizer))
-                for c in CONDITIONS
+                "ind1": ind_cache[s1], "ind2": ind_cache[s2],
+                "combo12": extract_activations(combo12_prompt, model, tokenizer),
+                "combo21": extract_activations(combo21_prompt, model, tokenizer),
+                "base": base_vecs,
             }
             for layer in range(1, n_layers + 1):
                 for c in CONDITIONS:
@@ -157,8 +172,8 @@ def main():
             scenario_ids.append((s1, s2, pat_idx))
 
             done += 1
-            if done % 50 == 0:
-                log.info(f"Progress: {done}/{total}  errors={errors}")
+            if done % 200 == 0:
+                log.info(f"Progress: {done}/{total}")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     scenario_ids_arr = np.array(scenario_ids, dtype=object)
@@ -167,8 +182,7 @@ def main():
         payload["scenario_ids"] = scenario_ids_arr
         np.savez(OUT_DIR / f"{args.model}_layer{layer}.npz", **payload)
 
-    log.info(f"[{args.model}] saved {n_layers} layer files -> {OUT_DIR}  "
-             f"({done} scenarios, {errors} skipped)")
+    log.info(f"[{args.model}] saved {n_layers} layer files -> {OUT_DIR}  ({done} scenarios)")
 
     unload_model(args.model, model, tokenizer, device)
 

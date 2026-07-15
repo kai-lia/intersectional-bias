@@ -54,7 +54,7 @@ def main():
 
     pattern_row = load_patterns().iloc[PATTERN_ID]
     prompts = [
-        make_prompts(pattern_row, phrase)[PROMPT_STYLE]
+        make_prompts(pattern_row, phrase)[PROMPT_STYLE]1
         for _, _, _, phrase in IDENTITIES
     ]
     for (label, *_), p in zip(IDENTITIES, prompts):
