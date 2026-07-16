@@ -2,3 +2,6 @@
 .venv
 .env
 data/
+.DS_Store
+__pycache__/
+*.py[cod]
