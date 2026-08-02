@@ -15,8 +15,8 @@ general," not "does it hold for Black/Lesbian specifically."
 """
 import argparse
 import logging
-import re
 import sys
+import time
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -26,19 +26,13 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 from metrics import bh_fdr, linear_cka_gram, bootstrap_diff
+from activation_io import discover_layers, load_scenarios
 
 ACT_DIR = ROOT.parent / "data" / "activations_random"
 OUT_DIR = ROOT.parent / "data" / "eval"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
-
-
-def discover_layers(model_name: str) -> list[int]:
-    pattern = re.compile(rf"^{re.escape(model_name)}_layer(\d+)\.npz$")
-    layers = [int(m.group(1)) for f in ACT_DIR.glob(f"{model_name}_layer*.npz")
-              if (m := pattern.match(f.name))]
-    return sorted(layers)
 
 
 def bootstrap_ci(values: np.ndarray, n_boot: int = 1000, seed: int = 0) -> tuple[float, float]:
@@ -67,8 +61,8 @@ def permutation_null(ind1, ind2, combo12, combo21, base_vecs,
     return null12, null21
 
 
-def run_model(model_name: str, n_boot: int, n_perm: int, seed: int) -> None:
-    layers = discover_layers(model_name)
+def run_model(model_name: str, n_boot: int, n_perm: int, seed: int, tag: str = "") -> None:
+    layers = discover_layers(ACT_DIR, model_name)
     if not layers:
         raise FileNotFoundError(
             f"No activation files for '{model_name}' in {ACT_DIR} "
@@ -76,9 +70,25 @@ def run_model(model_name: str, n_boot: int, n_perm: int, seed: int) -> None:
         )
     log.info(f"[{model_name}] found {len(layers)} layers")
 
+    # incremental checkpoint so a killed/interrupted run doesn't lose
+    # already-computed layers (this analysis takes long enough on the full
+    # 3885-scenario dataset that resuming matters) -- no FDR column yet,
+    # since BH-FDR is a correction across the *complete* set of layers and
+    # would be wrong to compute on a partial set.
+    partial_path = OUT_DIR / f"{model_name}_additivity_random{tag}_partial.csv"
     rows = []
+    done_layers = set()
+    if partial_path.exists():
+        prev = pd.read_csv(partial_path)
+        rows = prev.to_dict("records")
+        done_layers = set(prev["layer"].tolist())
+        log.info(f"[{model_name}] resuming -- {len(done_layers)} layers already done: {sorted(done_layers)}")
+
     for layer in layers:
-        data = np.load(ACT_DIR / f"{model_name}_layer{layer}.npz", allow_pickle=True)
+        if layer in done_layers:
+            continue
+        t_layer = time.time()
+        data = load_scenarios(ACT_DIR, model_name, layer)
         ind1, ind2 = data["ind1"], data["ind2"]
         combo12, combo21, base = data["combo12"], data["combo21"], data["base"]
         n = len(ind1)
@@ -133,19 +143,25 @@ def run_model(model_name: str, n_boot: int, n_perm: int, seed: int) -> None:
             "lean_combo21_ci_low": lean21_ci_low, "lean_combo21_ci_high": lean21_ci_high,
         })
 
-    df = pd.DataFrame(rows)
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(rows).to_csv(partial_path, index=False)
+        log.info(f"[{model_name}] layer {layer} done in {time.time() - t_layer:.1f}s "
+                 f"({len(rows)}/{len(layers)} layers, p12={p12:.3f}, p21={p21:.3f})")
+
+    df = pd.DataFrame(rows).sort_values("layer").reset_index(drop=True)
     df["p_value_combo12_fdr"] = bh_fdr(df["p_value_combo12"].to_numpy())
     df["p_value_combo21_fdr"] = bh_fdr(df["p_value_combo21"].to_numpy())
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    df.to_csv(OUT_DIR / f"{model_name}_additivity_random.csv", index=False)
-    log.info(f"[{model_name}] saved -> {OUT_DIR}/{model_name}_additivity_random.csv")
+    df.to_csv(OUT_DIR / f"{model_name}_additivity_random{tag}.csv", index=False)
+    partial_path.unlink(missing_ok=True)
+    log.info(f"[{model_name}] saved -> {OUT_DIR}/{model_name}_additivity_random{tag}.csv")
 
-    plot_additivity(model_name, df)
-    plot_lean(model_name, df)
+    plot_additivity(model_name, df, tag)
+    plot_lean(model_name, df, tag)
 
 
-def plot_lean(model_name: str, df: pd.DataFrame) -> None:
+def plot_lean(model_name: str, df: pd.DataFrame, tag: str = "") -> None:
     df = df.sort_values("layer")
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.plot(df["layer"], df["lean_combo12_toward_ind1"], marker="o", label="combo12")
@@ -158,11 +174,11 @@ def plot_lean(model_name: str, df: pd.DataFrame) -> None:
     ax.set_title(f"{model_name}: does the combo lean toward the first stigma, 100 random pairs")
     ax.legend()
     fig.tight_layout()
-    fig.savefig(OUT_DIR / f"{model_name}_additivity_random_lean.png", dpi=150)
+    fig.savefig(OUT_DIR / f"{model_name}_additivity_random{tag}_lean.png", dpi=150)
     plt.close(fig)
 
 
-def plot_additivity(model_name: str, df: pd.DataFrame) -> None:
+def plot_additivity(model_name: str, df: pd.DataFrame, tag: str = "") -> None:
     df = df.sort_values("layer")
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.plot(df["layer"], df["non_additive_frac_combo12_mean"], marker="o", label="combo12")
@@ -175,7 +191,7 @@ def plot_additivity(model_name: str, df: pd.DataFrame) -> None:
     ax.set_title(f"{model_name}: emergent (non-additive) share, 100 random stigma pairs")
     ax.legend()
     fig.tight_layout()
-    fig.savefig(OUT_DIR / f"{model_name}_additivity_random.png", dpi=150)
+    fig.savefig(OUT_DIR / f"{model_name}_additivity_random{tag}.png", dpi=150)
     plt.close(fig)
 
 
@@ -185,11 +201,13 @@ def main():
     parser.add_argument("--n-boot", type=int, default=1000)
     parser.add_argument("--n-perm", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--tag", default="", help="output filename suffix, e.g. _full112 -- "
+                         "keeps a full-scale rerun from overwriting existing fixed-15 results")
     args = parser.parse_args()
 
     for model_name in args.models:
         try:
-            run_model(model_name, args.n_boot, args.n_perm, args.seed)
+            run_model(model_name, args.n_boot, args.n_perm, args.seed, args.tag)
         except FileNotFoundError as exc:
             log.error(str(exc))
 

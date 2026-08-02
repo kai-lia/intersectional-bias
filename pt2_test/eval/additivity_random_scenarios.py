@@ -21,7 +21,7 @@ Outputs:
                                                    lean, both combo orderings
 """
 import argparse
-import re
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -29,7 +29,10 @@ import numpy as np
 import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap
 
-ROOT    = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+from activation_io import discover_layers, load_scenarios
+
 ACT_DIR = ROOT.parent / "data" / "activations_random"
 OUT_DIR = ROOT.parent / "data" / "eval"
 
@@ -42,13 +45,6 @@ SEQ_CMAP = LinearSegmentedColormap.from_list("seq_blue", _BLUE_RAMP)
 DIVERGING_CMAP = "RdBu_r"  # lean can be positive or negative -> diverging
 
 
-def discover_layers(model_name: str) -> list[int]:
-    pattern = re.compile(rf"^{re.escape(model_name)}_layer(\d+)\.npz$")
-    layers = [int(m.group(1)) for f in ACT_DIR.glob(f"{model_name}_layer*.npz")
-              if (m := pattern.match(f.name))]
-    return sorted(layers)
-
-
 def cosine_sim(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return (a * b).sum(-1) / (np.linalg.norm(a, axis=-1) * np.linalg.norm(b, axis=-1))
 
@@ -57,7 +53,7 @@ def compute_per_scenario(model_name: str, layers: list[int]) -> pd.DataFrame:
     """Long-form: one row per (stigma1, stigma2, pattern_id, layer)."""
     rows = []
     for layer in layers:
-        data = np.load(ACT_DIR / f"{model_name}_layer{layer}.npz", allow_pickle=True)
+        data = load_scenarios(ACT_DIR, model_name, layer)
         ind1, ind2 = data["ind1"], data["ind2"]
         combo12, combo21, base = data["combo12"], data["combo21"], data["base"]
         scenario_ids = data["scenario_ids"]
@@ -90,7 +86,7 @@ def build_pivot(long_df: pd.DataFrame, value_col: str) -> pd.DataFrame:
     return pivot.reindex(order)
 
 
-def plot_pair_heatmap(model_name: str, pivot: pd.DataFrame, label: str, diverging: bool) -> None:
+def plot_pair_heatmap(model_name: str, pivot: pd.DataFrame, label: str, diverging: bool, tag: str = "") -> None:
     values = pivot.to_numpy()
     if diverging:
         vmax = np.percentile(np.abs(values), 98)
@@ -103,15 +99,15 @@ def plot_pair_heatmap(model_name: str, pivot: pd.DataFrame, label: str, divergin
     im = ax.imshow(values, aspect="auto", cmap=cmap, vmin=vmin, vmax=vmax)
     ax.set_xticks(range(len(pivot.columns)))
     ax.set_xticklabels(pivot.columns, fontsize=6, rotation=90)
-    ax.set_yticks([])  # ~100 rows -- too many for readable per-row labels
+    ax.set_yticks([])  # too many rows for readable per-row labels at any scale we run this at
     ax.set_xlabel("Layer")
     ax.set_ylabel("Stigma pair (sorted by row mean, low -> high)")
-    ax.set_title(f"{model_name}: {label}, 100 random stigma pairs")
+    ax.set_title(f"{model_name}: {label}, {len(pivot)} stigma pairs")
     cbar = fig.colorbar(im, ax=ax, fraction=0.02, pad=0.02)
     cbar.set_label(label)
     fig.tight_layout()
     safe_label = label.replace(" ", "_").replace("(", "").replace(")", "")
-    fig.savefig(OUT_DIR / f"{model_name}_additivity_random_pair_heatmap_{safe_label}.png", dpi=150)
+    fig.savefig(OUT_DIR / f"{model_name}_additivity_random{tag}_pair_heatmap_{safe_label}.png", dpi=150)
     plt.close(fig)
 
 
@@ -129,9 +125,11 @@ def build_ranked_table(long_df: pd.DataFrame) -> pd.DataFrame:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="granite")
+    parser.add_argument("--tag", default="", help="output filename suffix, e.g. _full112 -- "
+                         "keeps a full-scale rerun from overwriting existing fixed-15 results")
     args = parser.parse_args()
 
-    layers = discover_layers(args.model)
+    layers = discover_layers(ACT_DIR, args.model)
     if not layers:
         raise FileNotFoundError(f"No activation files for '{args.model}' in {ACT_DIR}")
 
@@ -145,11 +143,11 @@ def main():
         ("lean_combo21", "lean toward ind1 (combo21)", True),
     ]:
         pivot = build_pivot(long_df, value_col)
-        plot_pair_heatmap(args.model, pivot, label, diverging)
+        plot_pair_heatmap(args.model, pivot, label, diverging, args.tag)
         print(f"saved -> heatmap for {label}")
 
     ranked = build_ranked_table(long_df)
-    out_csv = OUT_DIR / f"{args.model}_additivity_random_pairs.csv"
+    out_csv = OUT_DIR / f"{args.model}_additivity_random_pairs{args.tag}.csv"
     ranked.to_csv(out_csv, index=False)
     print(f"saved -> {out_csv}")
 
