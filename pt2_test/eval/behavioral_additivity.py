@@ -30,6 +30,10 @@ Consumed by pt2_test/eval/logit_lens.py's --behavior-csv (default path).
 import argparse
 from pathlib import Path
 
+import sys
+from pathlib import Path as _P
+sys.path.insert(0, str(_P(__file__).resolve().parent.parent.parent))
+
 import numpy as np
 import pandas as pd
 
@@ -39,6 +43,10 @@ OUT_DIR = ROOT.parent / "data" / "eval"
 
 
 def compute_behavioral_additivity(df: pd.DataFrame, model_name: str) -> pd.DataFrame:
+    """NOTE: `biased` must be polarity-corrected -- 23 of 37 patterns have "no"
+    as the biased answer, so a `1 if answer=="yes"` coding inverts them and
+    pooling across patterns cancels real signal.  main() repairs the column on
+    load if the source file predates the fix."""
     sub = df[df["model"] == model_name]
     if sub.empty:
         raise ValueError(f"No rows for model '{model_name}' in the results CSV.")
@@ -88,6 +96,16 @@ def main():
     args = parser.parse_args()
 
     df = pd.read_csv(args.results_csv)
+
+    # Repair legacy files written before polarity was carried through.
+    if "biased_answer" not in df.columns:
+        from pipeline.polarity import polarity_by_pattern, is_biased
+        pol = polarity_by_pattern()
+        df["biased_answer"] = df.pattern_id.map(pol)
+        naive = df["biased"].copy()
+        df["biased"] = [is_biased(a, b) for a, b in zip(df.model_answer, df.biased_answer)]
+        print(f"  polarity repaired on load: {(naive != df['biased']).mean():.1%} of rows changed")
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     for model_name in args.models:

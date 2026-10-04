@@ -20,6 +20,7 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(ROOT))
 
 from pipeline.prompt import load_patterns, make_prompts
+from pipeline.polarity import is_biased, polarity_by_pattern
 from pipeline.load_models import detect_device, load_model, unload_model
 from load_models_reasoning import RUNNERS
 from extract_activations import extract_activations
@@ -83,6 +84,7 @@ def main():
     log.info(f"Saved → {OUTPUT_NPZ}")
 
     rows = []
+    biased_answer = polarity_by_pattern()[PATTERN_ID]
     for (label, s1, s2, phrase), prompt, (answer, reasoning) in zip(IDENTITIES, prompts, answers):
         rows.append({
             "pattern_id":    PATTERN_ID,
@@ -95,7 +97,8 @@ def main():
             "model":         args.model,
             "model_answer":  answer,
             "Reasoning":     reasoning,
-            "biased":        1 if answer == "yes" else 0,
+            "biased_answer": biased_answer,
+            "biased":        is_biased(answer, biased_answer),
         })
 
     df = pd.DataFrame(rows)

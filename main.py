@@ -38,6 +38,7 @@ if _args.styles:
 from pipeline.combined_stigmas import run as build_combined_stigmas
 from pipeline.prompt import build_prompt_rows, COMBINED_PATH, PATTERNS_YES_NO
 from pipeline.load_models import detect_device, load_model, unload_model, RUNNERS, mem_used
+from pipeline.polarity import is_biased
 
 # logg
 logging.basicConfig(
@@ -190,7 +191,7 @@ for model_name in active_models:
                     "biased_answer": row["biased_answer"],
                     "model":         model_name,
                     "model_answer":  answer,
-                    "biased":        1 if answer == "yes" else 0,
+                    "biased":        is_biased(answer, row["biased_answer"]),
                 })
                 completed_keys.add(key)
                 done += 1

@@ -45,6 +45,7 @@ from pipeline.load_models import detect_device, load_model, unload_model, mem_us
 from pipeline.prompt import PATTERNS_YES_NO, COMBINED_PATH, load_patterns, _apply_swap
 from load_models_reasoning import RUNNERS
 from random_sample_activations import load_identities, all_stigma_pairs, mirror_phrase, single_phrase
+from pipeline.polarity import is_biased
 
 logging.basicConfig(
     level=logging.INFO,
@@ -174,7 +175,8 @@ def main():
                     "stigma1": cond["stigma1"], "stigma2": cond["stigma2"],
                     "stigma_phrase": cond["phrase"], "prompt": build_prompt(pat_row, cond),
                     "model": args.model, "model_answer": answer, "Reasoning": reasoning,
-                    "biased": 1 if answer == "yes" else 0,
+                    "biased_answer": pat_row["Biased Answer"],
+                        "biased": is_biased(answer, pat_row["Biased Answer"]),
                 })
                 done += 1
 

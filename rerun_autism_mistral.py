@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config.settings import BATCH_SIZE, CSV_FLUSH_EVERY
 from pipeline.prompt import build_prompt_rows, COMBINED_PATH, PATTERNS_YES_NO
 from pipeline.load_models import detect_device, load_model, unload_model, RUNNERS, mem_used
+from pipeline.polarity import is_biased
 
 logging.basicConfig(
     level=logging.INFO,
@@ -119,7 +120,7 @@ with open(OUTPUT_CSV, "a", newline="") as f:
                 "biased_answer": row["biased_answer"],
                 "model":         TARGET_MODEL,
                 "model_answer":  answer,
-                "biased":        1 if answer == "yes" else 0,
+                "biased":        is_biased(answer, row["biased_answer"]),
             })
             done += 1
 

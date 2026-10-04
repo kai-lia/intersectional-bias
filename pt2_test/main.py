@@ -26,6 +26,7 @@ from pipeline.combined_stigmas import run as build_combined_stigmas
 from pipeline.prompt import build_prompt_rows, COMBINED_PATH, PATTERNS_YES_NO
 from pipeline.load_models import detect_device, load_model, unload_model, mem_used
 from load_models_reasoning import RUNNERS  # reasoning-aware runners
+from pipeline.polarity import is_biased
 
 logging.basicConfig(
     level=logging.INFO,
@@ -183,7 +184,7 @@ for model_name in active_models:
                     "model":         model_name,
                     "model_answer":  answer,
                     "Reasoning":     reasoning,
-                    "biased":        1 if answer == "yes" else 0,
+                    "biased":        is_biased(answer, row["biased_answer"]),
                 })
                 completed_keys.add(key)
                 done += 1

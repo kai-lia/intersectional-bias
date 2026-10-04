@@ -42,6 +42,7 @@ sys.path.insert(0, str(ROOT))
 from pipeline.load_models import detect_device, load_model, unload_model, mem_used
 from pipeline.prompt import PATTERNS_YES_NO, COMBINED_PATH, load_patterns, _apply_swap
 from load_models_reasoning import RUNNERS
+from pipeline.polarity import is_biased
 
 logging.basicConfig(
     level=logging.INFO,
@@ -190,7 +191,8 @@ def main():
                     "race": cond["race"], "orientation": cond["orientation"],
                     "stigma_phrase": cond["phrase"], "prompt": build_prompt(pat_row, cond),
                     "model": args.model, "model_answer": answer, "Reasoning": reasoning,
-                    "biased": 1 if answer == "yes" else 0,
+                    "biased_answer": pat_row["Biased Answer"],
+                        "biased": is_biased(answer, pat_row["Biased Answer"]),
                 })
                 done += 1
 
