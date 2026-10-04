@@ -5,3 +5,5 @@ data/
 __pycache__/
 *.pyc
 .DS_Store
+final_run/outputs/
+final_run/outputs_smoke/

@@ -1,0 +1,7 @@
+# generate.py --backend vllm, in its OWN environment (vLLM pins its own torch).
+# Install on the CUDA machine; the exact versions used are written to
+# outputs/run_info/generate_model={m}.json.
+vllm
+transformers
+pandas
+numpy
