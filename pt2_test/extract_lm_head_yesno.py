@@ -49,7 +49,23 @@ from pipeline.load_models import detect_device, load_model, unload_model, mem_us
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
-OUT_PATH = ROOT / "data" / "lm_head_yesno.npz"
+# per-model: the head differs by checkpoint, and a shared filename would
+# silently overwrite one model's head with another's
+# base and instruct checkpoints have DIFFERENT unembeddings, so comparing
+# base activations against an instruct head would confound tuning with readout.
+CHECKPOINTS = {
+    ("granite", "base"):     "ibm-granite/granite-3.0-8b-base",
+    ("granite", "instruct"): "ibm-granite/granite-3.0-8b-instruct",
+    ("llama",   "base"):     "meta-llama/Llama-3.1-8B",
+    ("llama",   "instruct"): "meta-llama/Llama-3.1-8B-Instruct",
+    ("mistral", "base"):     "mistralai/Mistral-7B-v0.1",
+    ("mistral", "instruct"): "mistralai/Mistral-7B-Instruct-v0.1",
+}
+
+
+def out_path(model: str, variant: str = "instruct"):
+    suffix = "" if variant == "instruct" else f"_{variant}"
+    return ROOT / "data" / f"lm_head_yesno_{model}{suffix}.npz"
 
 YES_VARIANTS = ["Yes", " Yes", "yes", " yes", "YES", " YES", "Yes,", "Yes.", "▁Yes", "▁yes"]
 NO_VARIANTS  = ["No", " No", "no", " no", "NO", " NO", "No,", "No.", "▁No", "▁no"]
@@ -75,6 +91,7 @@ def find_final_norm(model):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="granite", choices=["granite", "llama", "mistral"])
+    parser.add_argument("--variant", default="instruct", choices=["base", "instruct"])
     args = parser.parse_args()
 
     token = os.getenv("HF_TOKEN")
@@ -84,7 +101,13 @@ def main():
     login(token)
 
     device, device_map, dtype, _ = detect_device()
-    model, tokenizer = load_model(args.model, device_map, dtype)
+    if args.variant == "instruct":
+        model, tokenizer = load_model(args.model, device_map, dtype)
+    else:
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        mid = CHECKPOINTS[(args.model, args.variant)]
+        tokenizer = AutoTokenizer.from_pretrained(mid)
+        model = AutoModelForCausalLM.from_pretrained(mid, device_map=device_map, dtype=dtype).eval()
     log.info(f"[{args.model}] loaded (mem: {mem_used(device)})")
 
     norm = find_final_norm(model)
@@ -113,9 +136,9 @@ def main():
              f"{[s for s, y in zip(token_strs, is_yes) if y]} (yes) / "
              f"{[s for s, y in zip(token_strs, is_yes) if not y]} (no)")
 
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    out_path(args.model, args.variant).parent.mkdir(parents=True, exist_ok=True)
     np.savez(
-        OUT_PATH,
+        out_path(args.model, args.variant),
         token_strs=np.array(token_strs, dtype=object),
         token_ids=np.array(token_ids, dtype=np.int64),
         is_yes=np.array(is_yes, dtype=bool),
@@ -125,7 +148,7 @@ def main():
         norm_type=norm_type,
         norm_eps=norm_eps,
     )
-    log.info(f"saved -> {OUT_PATH}")
+    log.info(f"saved -> {out_path(args.model, args.variant)}")
 
     unload_model(args.model, model, tokenizer, device)
 

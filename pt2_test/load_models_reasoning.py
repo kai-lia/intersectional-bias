@@ -9,11 +9,14 @@ import torch
 
 log = logging.getLogger(__name__)
 
-# Generate enough tokens to capture a full reasoning paragraph
+# Short window -- just enough for the parser to catch the yes/no verdict.
+# Reasoning traces (previous 300-token runs) were prohibitively slow at full-112
+# scale (~100h/model); behavioral_additivity.py only reads the yes/no `biased`
+# column, so trading reasoning for tractable runtime.
 _MAX_NEW_TOKENS = {
-    "granite": 300,
-    "llama":   300,
-    "mistral": 300,
+    "granite": 10,
+    "llama":   10,
+    "mistral": 10,
 }
 
 

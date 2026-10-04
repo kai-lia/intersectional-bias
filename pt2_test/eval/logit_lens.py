@@ -35,7 +35,11 @@ from activation_io import discover_layers, load_scenarios
 
 ACT_DIR = ROOT.parent / "data" / "activations_random"
 OUT_DIR = ROOT.parent / "data" / "eval"
-LM_HEAD_PATH = ROOT.parent / "data" / "lm_head_yesno.npz"
+def lm_head_path(model: str):
+    """Per-model head; falls back to the legacy shared filename."""
+    p = ROOT.parent / "data" / f"lm_head_yesno_{model}.npz"
+    legacy = ROOT.parent / "data" / "lm_head_yesno.npz"
+    return p if p.exists() or not legacy.exists() else legacy
 
 
 def bh_fdr(pvals: np.ndarray) -> np.ndarray:
@@ -79,8 +83,8 @@ def yes_logit(x: np.ndarray, head) -> np.ndarray:
     return yes_score - no_score  # log-odds(yes) - log-odds(no) == log-odds ratio
 
 
-def load_head():
-    data = np.load(LM_HEAD_PATH, allow_pickle=True)
+def load_head(model: str):
+    data = np.load(lm_head_path(model), allow_pickle=True)
     return {
         "lm_head_rows": data["lm_head_rows"],
         "norm_weight": data["norm_weight"],
@@ -102,12 +106,12 @@ def main():
     args = parser.parse_args()
     behavior_csv = args.behavior_csv or str(OUT_DIR / f"{args.model}_behavioral_additivity{args.tag}.csv")
 
-    if not LM_HEAD_PATH.exists():
+    if not lm_head_path(args.model).exists():
         raise FileNotFoundError(
-            f"{LM_HEAD_PATH} not found -- run pt2_test/extract_lm_head_yesno.py "
+            f"{lm_head_path(args.model)} not found -- run pt2_test/extract_lm_head_yesno.py "
             f"on the model-serving machine first."
         )
-    head = load_head()
+    head = load_head(args.model)
     beh = pd.read_csv(behavior_csv)
     beh_lookup = {tuple(sorted([r.stigma1, r.stigma2])): r.abs_behavioral_residual for _, r in beh.iterrows()}
 
