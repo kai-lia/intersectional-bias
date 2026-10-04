@@ -1,0 +1,48 @@
+Note: Environment variable`HF_TOKEN` is set and is the current active token independently from the token you've just configured.
+2026-08-09 19:24:09,935 [WARNING] Note: Environment variable`HF_TOKEN` is set and is the current active token independently from the token you've just configured.
+2026-08-09 19:24:09,962 [INFO] 112 identities (full) -> 6216 pairs x 37 patterns = 464165 forward passes total (12545/pattern)
+2026-08-09 19:24:09,962 [INFO] [granite] resuming -- 1/37 pattern shards already on disk
+2026-08-09 19:24:09,970 [INFO] MPS device (Apple Silicon), dtype: bfloat16, batch: 64
+2026-08-09 19:24:09,970 [INFO] [granite] Loading ibm-granite/granite-3.0-8b-instruct
+`torch_dtype` is deprecated! Use `dtype` instead!
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:07,  2.39s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.25s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:06<00:02,  2.13s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.53s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.78s/it]
+2026-08-09 19:24:18,201 [INFO] [granite] Loaded on mps:0
+2026-08-09 19:24:18,201 [INFO] [granite] 40 layers  (mem after load: 16.34 GB)
+2026-08-09 19:56:38,308 [INFO] [granite] pattern 0 done (1/36 this run, 2/37 total)  mem=16.34 GB
+2026-08-09 20:28:44,471 [INFO] [granite] pattern 1 done (2/36 this run, 3/37 total)  mem=16.34 GB
+2026-08-09 20:53:55,094 [INFO] [granite] pattern 2 done (3/36 this run, 4/37 total)  mem=16.34 GB
+2026-08-09 21:19:11,631 [INFO] [granite] pattern 3 done (4/36 this run, 5/37 total)  mem=16.34 GB
+2026-08-09 21:45:19,361 [INFO] [granite] pattern 4 done (5/36 this run, 6/37 total)  mem=16.34 GB
+2026-08-09 22:17:05,814 [INFO] [granite] pattern 5 done (6/36 this run, 7/37 total)  mem=16.34 GB
+2026-08-09 22:48:54,817 [INFO] [granite] pattern 6 done (7/36 this run, 8/37 total)  mem=16.34 GB
+2026-08-09 23:23:49,899 [INFO] [granite] pattern 7 done (8/36 this run, 9/37 total)  mem=16.34 GB
+2026-08-09 23:58:51,094 [INFO] [granite] pattern 8 done (9/36 this run, 10/37 total)  mem=16.34 GB
+2026-08-10 00:31:14,523 [INFO] [granite] pattern 9 done (10/36 this run, 11/37 total)  mem=16.34 GB
+2026-08-10 01:06:14,453 [INFO] [granite] pattern 10 done (11/36 this run, 12/37 total)  mem=16.34 GB
+2026-08-10 01:37:52,492 [INFO] [granite] pattern 11 done (12/36 this run, 13/37 total)  mem=16.34 GB
+2026-08-10 02:04:30,612 [INFO] [granite] pattern 12 done (13/36 this run, 14/37 total)  mem=16.34 GB
+2026-08-10 02:36:17,527 [INFO] [granite] pattern 13 done (14/36 this run, 15/37 total)  mem=16.34 GB
+2026-08-10 03:10:11,372 [INFO] [granite] pattern 14 done (15/36 this run, 16/37 total)  mem=16.34 GB
+2026-08-10 03:44:29,342 [INFO] [granite] pattern 15 done (16/36 this run, 17/37 total)  mem=16.34 GB
+2026-08-10 04:16:29,638 [INFO] [granite] pattern 16 done (17/36 this run, 18/37 total)  mem=16.34 GB
+2026-08-10 04:50:23,175 [INFO] [granite] pattern 17 done (18/36 this run, 19/37 total)  mem=16.34 GB
+2026-08-10 05:25:40,942 [INFO] [granite] pattern 18 done (19/36 this run, 20/37 total)  mem=16.34 GB
+2026-08-10 06:00:40,758 [INFO] [granite] pattern 19 done (20/36 this run, 21/37 total)  mem=16.34 GB
+2026-08-10 06:32:36,400 [INFO] [granite] pattern 20 done (21/36 this run, 22/37 total)  mem=16.34 GB
+2026-08-10 07:01:46,573 [INFO] [granite] pattern 21 done (22/36 this run, 23/37 total)  mem=16.34 GB
+2026-08-10 07:33:39,679 [INFO] [granite] pattern 23 done (23/36 this run, 24/37 total)  mem=16.34 GB
+2026-08-10 08:06:19,798 [INFO] [granite] pattern 24 done (24/36 this run, 25/37 total)  mem=16.34 GB
+2026-08-10 08:37:09,312 [INFO] [granite] pattern 25 done (25/36 this run, 26/37 total)  mem=16.34 GB
+2026-08-10 09:04:29,867 [INFO] [granite] pattern 26 done (26/36 this run, 27/37 total)  mem=16.34 GB
+2026-08-10 09:37:57,073 [INFO] [granite] pattern 27 done (27/36 this run, 28/37 total)  mem=16.34 GB
+2026-08-10 10:12:54,258 [INFO] [granite] pattern 28 done (28/36 this run, 29/37 total)  mem=16.34 GB
+2026-08-10 10:47:12,583 [INFO] [granite] pattern 29 done (29/36 this run, 30/37 total)  mem=16.34 GB
+2026-08-10 11:19:49,060 [INFO] [granite] pattern 30 done (30/36 this run, 31/37 total)  mem=16.34 GB
+2026-08-10 11:45:05,408 [INFO] [granite] pattern 31 done (31/36 this run, 32/37 total)  mem=16.34 GB
+2026-08-10 12:17:03,631 [INFO] [granite] pattern 32 done (32/36 this run, 33/37 total)  mem=16.34 GB
+2026-08-10 12:48:40,748 [INFO] [granite] pattern 33 done (33/36 this run, 34/37 total)  mem=16.34 GB
+2026-08-10 13:20:35,743 [INFO] [granite] pattern 34 done (34/36 this run, 35/37 total)  mem=16.34 GB
+2026-08-10 13:54:52,820 [INFO] [granite] pattern 35 done (35/36 this run, 36/37 total)  mem=16.34 GB
+2026-08-10 14:29:41,917 [INFO] [granite] pattern 36 done (36/36 this run, 37/37 total)  mem=16.34 GB
+2026-08-10 14:29:41,918 [INFO] [granite] saved 36 pattern shards -> /Users/repos/intersectional-bias/pt2_test/data/activations_random
+2026-08-10 14:29:41,918 [INFO] [granite] Unloading model

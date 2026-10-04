@@ -1,0 +1,48 @@
+Note: Environment variable`HF_TOKEN` is set and is the current active token independently from the token you've just configured.
+2026-08-12 22:47:11,225 [WARNING] Note: Environment variable`HF_TOKEN` is set and is the current active token independently from the token you've just configured.
+2026-08-12 22:47:11,249 [INFO] 112 identities (full) -> 6216 pairs x 37 patterns = 464165 forward passes total (12545/pattern)
+2026-08-12 22:47:11,249 [INFO] [llama] resuming -- 1/37 pattern shards already on disk
+2026-08-12 22:47:11,258 [INFO] MPS device (Apple Silicon), dtype: bfloat16, batch: 64
+2026-08-12 22:47:11,258 [INFO] [llama] Loading meta-llama/Llama-3.1-8B-Instruct
+`torch_dtype` is deprecated! Use `dtype` instead!
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:07,  2.41s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.23s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:06<00:02,  2.18s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.52s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.79s/it]
+2026-08-12 22:47:19,662 [INFO] [llama] Loaded on mps:0
+2026-08-12 22:47:19,662 [INFO] [llama] 32 layers  (mem after load: 16.06 GB)
+2026-08-13 08:49:09,444 [INFO] [llama] pattern 0 done (1/36 this run, 2/37 total)  mem=16.06 GB
+2026-08-13 16:00:37,149 [INFO] [llama] pattern 1 done (2/36 this run, 3/37 total)  mem=16.06 GB
+2026-08-13 16:39:25,311 [INFO] [llama] pattern 2 done (3/36 this run, 4/37 total)  mem=16.06 GB
+2026-08-13 17:10:09,532 [INFO] [llama] pattern 3 done (4/36 this run, 5/37 total)  mem=16.06 GB
+2026-08-13 17:42:19,070 [INFO] [llama] pattern 4 done (5/36 this run, 6/37 total)  mem=16.06 GB
+2026-08-13 18:15:24,669 [INFO] [llama] pattern 5 done (6/36 this run, 7/37 total)  mem=16.06 GB
+2026-08-13 18:48:20,311 [INFO] [llama] pattern 6 done (7/36 this run, 8/37 total)  mem=16.06 GB
+2026-08-13 19:25:58,614 [INFO] [llama] pattern 7 done (8/36 this run, 9/37 total)  mem=16.06 GB
+2026-08-13 20:03:49,824 [INFO] [llama] pattern 8 done (9/36 this run, 10/37 total)  mem=16.06 GB
+2026-08-13 20:40:25,677 [INFO] [llama] pattern 9 done (10/36 this run, 11/37 total)  mem=16.06 GB
+2026-08-13 21:18:13,252 [INFO] [llama] pattern 10 done (11/36 this run, 12/37 total)  mem=16.06 GB
+2026-08-13 21:51:08,955 [INFO] [llama] pattern 11 done (12/36 this run, 13/37 total)  mem=16.06 GB
+2026-08-13 22:23:22,034 [INFO] [llama] pattern 12 done (13/36 this run, 14/37 total)  mem=16.06 GB
+2026-08-13 22:56:18,169 [INFO] [llama] pattern 13 done (14/36 this run, 15/37 total)  mem=16.06 GB
+2026-08-13 23:33:57,530 [INFO] [llama] pattern 14 done (15/36 this run, 16/37 total)  mem=16.06 GB
+2026-08-14 00:09:40,856 [INFO] [llama] pattern 15 done (16/36 this run, 17/37 total)  mem=16.06 GB
+2026-08-14 00:42:35,789 [INFO] [llama] pattern 16 done (17/36 this run, 18/37 total)  mem=16.06 GB
+2026-08-14 01:18:19,915 [INFO] [llama] pattern 17 done (18/36 this run, 19/37 total)  mem=16.06 GB
+2026-08-14 01:56:52,743 [INFO] [llama] pattern 18 done (19/36 this run, 20/37 total)  mem=16.06 GB
+2026-08-14 02:34:40,296 [INFO] [llama] pattern 19 done (20/36 this run, 21/37 total)  mem=16.06 GB
+2026-08-14 03:08:15,789 [INFO] [llama] pattern 20 done (21/36 this run, 22/37 total)  mem=16.06 GB
+2026-08-14 03:41:00,931 [INFO] [llama] pattern 21 done (22/36 this run, 23/37 total)  mem=16.06 GB
+2026-08-14 04:14:15,405 [INFO] [llama] pattern 23 done (23/36 this run, 24/37 total)  mem=16.06 GB
+2026-08-14 04:51:24,428 [INFO] [llama] pattern 24 done (24/36 this run, 25/37 total)  mem=16.06 GB
+2026-08-14 05:24:16,255 [INFO] [llama] pattern 25 done (25/36 this run, 26/37 total)  mem=16.06 GB
+2026-08-14 05:57:01,071 [INFO] [llama] pattern 26 done (26/36 this run, 27/37 total)  mem=16.06 GB
+2026-08-14 06:34:43,823 [INFO] [llama] pattern 27 done (27/36 this run, 28/37 total)  mem=16.06 GB
+2026-08-14 07:12:34,295 [INFO] [llama] pattern 28 done (28/36 this run, 29/37 total)  mem=16.06 GB
+2026-08-14 07:50:14,396 [INFO] [llama] pattern 29 done (29/36 this run, 30/37 total)  mem=16.06 GB
+2026-08-14 08:24:20,834 [INFO] [llama] pattern 30 done (30/36 this run, 31/37 total)  mem=16.06 GB
+2026-08-14 08:54:19,233 [INFO] [llama] pattern 31 done (31/36 this run, 32/37 total)  mem=16.06 GB
+2026-08-14 09:28:36,874 [INFO] [llama] pattern 32 done (32/36 this run, 33/37 total)  mem=16.06 GB
+2026-08-14 10:01:27,564 [INFO] [llama] pattern 33 done (33/36 this run, 34/37 total)  mem=16.06 GB
+2026-08-14 10:34:32,372 [INFO] [llama] pattern 34 done (34/36 this run, 35/37 total)  mem=16.06 GB
+2026-08-14 11:12:03,184 [INFO] [llama] pattern 35 done (35/36 this run, 36/37 total)  mem=16.06 GB
+2026-08-14 11:49:48,135 [INFO] [llama] pattern 36 done (36/36 this run, 37/37 total)  mem=16.06 GB
+2026-08-14 11:49:48,135 [INFO] [llama] saved 36 pattern shards -> /Users/repos/intersectional-bias/pt2_test/data/activations_random
+2026-08-14 11:49:48,135 [INFO] [llama] Unloading model

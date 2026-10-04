@@ -1,0 +1,57 @@
+Note: Environment variable`HF_TOKEN` is set and is the current active token independently from the token you've just configured.
+2026-08-14 21:22:33,504 [WARNING] Note: Environment variable`HF_TOKEN` is set and is the current active token independently from the token you've just configured.
+2026-08-14 21:22:33,548 [INFO] 112 identities (full) -> 6216 pairs x 37 patterns = 464165 forward passes total (12545/pattern)
+2026-08-14 21:22:33,558 [INFO] MPS device (Apple Silicon), dtype: bfloat16, batch: 64
+2026-08-14 21:22:33,558 [INFO] [mistral] Loading mistralai/Mistral-7B-Instruct-v0.1
+`torch_dtype` is deprecated! Use `dtype` instead!
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:04<00:04,  4.71s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:06<00:00,  3.12s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:06<00:00,  3.36s/it]
+2026-08-14 21:22:41,570 [INFO] [mistral] Loaded on mps:0
+2026-08-14 21:22:41,570 [INFO] [mistral] 32 layers  (mem after load: 14.48 GB)
+2026-08-14 21:49:52,417 [INFO] [mistral] pattern 0 done (1/37 this run, 1/37 total)  mem=14.48 GB
+2026-08-14 22:17:07,052 [INFO] [mistral] pattern 1 done (2/37 this run, 2/37 total)  mem=14.48 GB
+2026-08-14 22:38:21,086 [INFO] [mistral] pattern 2 done (3/37 this run, 3/37 total)  mem=14.48 GB
+2026-08-14 22:59:46,641 [INFO] [mistral] pattern 3 done (4/37 this run, 4/37 total)  mem=14.48 GB
+2026-08-14 23:21:20,416 [INFO] [mistral] pattern 4 done (5/37 this run, 5/37 total)  mem=14.48 GB
+2026-08-14 23:48:22,336 [INFO] [mistral] pattern 5 done (6/37 this run, 6/37 total)  mem=14.48 GB
+2026-08-15 00:15:04,366 [INFO] [mistral] pattern 6 done (7/37 this run, 7/37 total)  mem=14.48 GB
+2026-08-15 00:43:28,791 [INFO] [mistral] pattern 7 done (8/37 this run, 8/37 total)  mem=14.48 GB
+2026-08-15 01:13:25,585 [INFO] [mistral] pattern 8 done (9/37 this run, 9/37 total)  mem=14.48 GB
+2026-08-15 01:40:51,177 [INFO] [mistral] pattern 9 done (10/37 this run, 10/37 total)  mem=14.48 GB
+2026-08-15 02:10:35,996 [INFO] [mistral] pattern 10 done (11/37 this run, 11/37 total)  mem=14.48 GB
+2026-08-15 02:37:18,770 [INFO] [mistral] pattern 11 done (12/37 this run, 12/37 total)  mem=14.48 GB
+2026-08-15 02:59:18,894 [INFO] [mistral] pattern 12 done (13/37 this run, 13/37 total)  mem=14.48 GB
+2026-08-15 03:25:26,875 [INFO] [mistral] pattern 13 done (14/37 this run, 14/37 total)  mem=14.48 GB
+2026-08-15 03:53:50,526 [INFO] [mistral] pattern 14 done (15/37 this run, 15/37 total)  mem=14.48 GB
+2026-08-15 04:21:16,148 [INFO] [mistral] pattern 15 done (16/37 this run, 16/37 total)  mem=14.48 GB
+2026-08-15 04:47:58,554 [INFO] [mistral] pattern 16 done (17/37 this run, 17/37 total)  mem=14.48 GB
+2026-08-15 05:15:28,966 [INFO] [mistral] pattern 17 done (18/37 this run, 18/37 total)  mem=14.48 GB
+2026-08-15 05:45:33,421 [INFO] [mistral] pattern 18 done (19/37 this run, 19/37 total)  mem=14.48 GB
+2026-08-15 06:14:47,664 [INFO] [mistral] pattern 19 done (20/37 this run, 20/37 total)  mem=14.48 GB
+2026-08-15 06:42:13,547 [INFO] [mistral] pattern 20 done (21/37 this run, 21/37 total)  mem=14.48 GB
+2026-08-15 07:05:46,361 [INFO] [mistral] pattern 21 done (22/37 this run, 22/37 total)  mem=14.48 GB
+2026-08-15 07:32:30,157 [INFO] [mistral] pattern 22 done (23/37 this run, 23/37 total)  mem=14.48 GB
+2026-08-15 07:59:46,378 [INFO] [mistral] pattern 23 done (24/37 this run, 24/37 total)  mem=14.48 GB
+2026-08-15 08:27:49,723 [INFO] [mistral] pattern 24 done (25/37 this run, 25/37 total)  mem=14.48 GB
+2026-08-15 08:53:11,057 [INFO] [mistral] pattern 25 done (26/37 this run, 26/37 total)  mem=14.48 GB
+2026-08-15 09:15:31,721 [INFO] [mistral] pattern 26 done (27/37 this run, 27/37 total)  mem=14.48 GB
+2026-08-15 09:43:35,903 [INFO] [mistral] pattern 27 done (28/37 this run, 28/37 total)  mem=14.48 GB
+2026-08-15 10:13:29,637 [INFO] [mistral] pattern 28 done (29/37 this run, 29/37 total)  mem=14.48 GB
+2026-08-15 10:41:54,091 [INFO] [mistral] pattern 29 done (30/37 this run, 30/37 total)  mem=14.48 GB
+2026-08-15 11:09:25,208 [INFO] [mistral] pattern 30 done (31/37 this run, 31/37 total)  mem=14.48 GB
+2026-08-15 11:30:32,103 [INFO] [mistral] pattern 31 done (32/37 this run, 32/37 total)  mem=14.48 GB
+2026-08-15 11:57:54,677 [INFO] [mistral] pattern 32 done (33/37 this run, 33/37 total)  mem=14.48 GB
+2026-08-15 12:23:18,440 [INFO] [mistral] pattern 33 done (34/37 this run, 34/37 total)  mem=14.48 GB
+Traceback (most recent call last):
+  File "/Users/repos/intersectional-bias/pt2_test/random_sample_activations.py", line 268, in <module>
+    main()
+  File "/Users/repos/intersectional-bias/pt2_test/random_sample_activations.py", line 257, in main
+    np.savez(shard_path, pattern_id=pat_idx, **payload)
+  File "/Users/repos/intersectional-bias/.venv/lib/python3.11/site-packages/numpy/lib/_npyio_impl.py", line 673, in savez
+    _savez(file, args, kwds, False, allow_pickle=allow_pickle)
+  File "/Users/repos/intersectional-bias/.venv/lib/python3.11/site-packages/numpy/lib/_npyio_impl.py", line 786, in _savez
+    format.write_array(fid, val,
+  File "/Users/repos/intersectional-bias/.venv/lib/python3.11/site-packages/numpy/lib/_format_impl.py", line 777, in write_array
+    fp.write(chunk.tobytes('C'))
+  File "/opt/homebrew/anaconda3/envs/kai-test/lib/python3.11/zipfile.py", line 1196, in write
+    self._fileobj.write(data)
+OSError: [Errno 28] No space left on device
