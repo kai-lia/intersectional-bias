@@ -64,6 +64,13 @@ MODEL_IDS = {
     "llama":   "meta-llama/Llama-3.1-8B-Instruct",
     "mistral": "mistralai/Mistral-7B-Instruct-v0.1",
 }
+# Hugging Face commits, pinned so every machine loads identical weights and
+# tokenizer; these are the snapshots the pilot ran on (checked 2026-10-04).
+MODEL_REVISIONS = {
+    "granite": "5af56291a1c6ca9056df597aab0cff53edabddb0",
+    "llama":   "0e9e39f249a16976918f6564b8830bc894c89659",
+    "mistral": "ec5deb64f2c6e6fa90c1abf74a91d5c93a9669ca",
+}
 WORDING_COLS = ["original", "paraphrase_1", "paraphrase_2", "paraphrase_3"]
 ANSWER_SWAP = ("Answer with yes/no/can't tell",
                "Answer first only with yes or no, then provide your reasoning")
@@ -121,7 +128,34 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def token_ids_sha256(ids) -> str:
+    """Digest of a group's prompt token ids in row order.  extract and generate
+    both record it in their done markers; check.py requires them to match."""
+    h = hashlib.sha256()
+    for x in ids:
+        h.update((",".join(map(str, x)) + "\n").encode())
+    return h.hexdigest()
+
+
+def host_info() -> dict:
+    """Machine identity for each done marker, so a group can be traced to the
+    exact GPU type and driver it ran on (a resumed run may land elsewhere)."""
+    info = {"hostname": os.uname().nodename}
+    try:
+        q = subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"],
+                           capture_output=True, text=True, timeout=30)
+        name, driver = [s.strip() for s in q.stdout.splitlines()[0].split(",")]
+        info.update(gpu=name, driver=driver)
+    except (OSError, IndexError, ValueError, subprocess.SubprocessError):
+        info.update(gpu=torch.cuda.get_device_name(0) if torch.cuda.is_available() else None, driver=None)
+    return info
+
+
 # model
+
+def load_tokenizer(name: str):
+    return AutoTokenizer.from_pretrained(MODEL_IDS[name], revision=MODEL_REVISIONS[name])
+
 
 def load_model(name: str):
     if torch.cuda.is_available():
@@ -135,12 +169,13 @@ def load_model(name: str):
         log.info("MPS (Apple Silicon), bfloat16")
     else:
         sys.exit("No GPU available.")
-    tok = AutoTokenizer.from_pretrained(MODEL_IDS[name])
+    tok = load_tokenizer(name)
     tok.padding_side = "left"
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
     model = AutoModelForCausalLM.from_pretrained(
-        MODEL_IDS[name], torch_dtype=dtype, device_map={"": device}, attn_implementation="sdpa")
+        MODEL_IDS[name], revision=MODEL_REVISIONS[name], torch_dtype=dtype,
+        device_map={"": device}, attn_implementation="sdpa")
     model.eval()
     return model, tok, device, dtype, auto_batch
 
@@ -159,12 +194,13 @@ def answer_token_ids(tok):
 @torch.inference_mode()
 def run_group(prompts, model, tok, batch_size, yes_ids, no_ids):
     """Returns hidden (n_layers, N, d) fp16 at the last prompt token for layers
-    1..n_layers, and answer-token log-probs (N, k) float32."""
+    1..n_layers, answer-token log-probs (N, k) float32, and the token-id digest."""
     n_layers, d = model.config.num_hidden_layers, model.config.hidden_size
     chats = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False,
                                      add_generation_prompt=True) for p in prompts]
     # same tokenizer call as the pilot (default add_special_tokens) for comparability
-    lengths = [len(tok(c)["input_ids"]) for c in chats]
+    ids = [tok(c)["input_ids"] for c in chats]
+    lengths = [len(x) for x in ids]
     order = np.argsort(lengths)[::-1]                 # long first: OOM shows up early
     hidden = np.empty((n_layers, len(prompts), d), dtype=np.float16)
     ans_ids = torch.tensor(yes_ids + no_ids, device=model.device)
@@ -187,7 +223,7 @@ def run_group(prompts, model, tok, batch_size, yes_ids, no_ids):
         logp[idx] = lp.cpu().numpy()
     if n_nonfinite:
         log.warning(f"{n_nonfinite} activation values overflowed fp16")
-    return hidden, logp
+    return hidden, logp, token_ids_sha256(ids)
 
 
 # outputs
@@ -326,9 +362,10 @@ def main():
         n_layers = model.config.num_hidden_layers
         info = {
             "model": name, "model_id": MODEL_IDS[name],
-            "model_revision": getattr(model.config, "_commit_hash", None),
+            "model_revision": MODEL_REVISIONS[name],
+            "loaded_revision": getattr(model.config, "_commit_hash", None),
             "n_layers": n_layers, "hidden_size": model.config.hidden_size,
-            "device": torch.cuda.get_device_name(0) if device == "cuda" else device,
+            "device": torch.cuda.get_device_name(0) if device == "cuda" else device, **host_info(),
             "compute_dtype": str(dtype), "stored_dtype": "float16", "batch_size": bs,
             "torch": torch.__version__, "transformers": __import__("transformers").__version__,
             "inputs_sha256": {p.name: sha256(p) for p in (IDENTITIES_CSV, TEMPLATES_CSV)},
@@ -349,7 +386,7 @@ def main():
         for k, (pid, w, template) in enumerate(todo, 1):
             t0 = time.time()
             prompts = build_prompts(template, identities, single_phrase, pairs, combo_phrase)
-            hidden, logp = run_group(prompts, model, tok, bs, yes_ids, no_ids)
+            hidden, logp, ids_sha = run_group(prompts, model, tok, bs, yes_ids, no_ids)
             stem = f"p{pid:02d}_w{w}"
             rel_files = []
             for l in range(1, n_layers + 1):
@@ -372,7 +409,8 @@ def main():
             done_rel = f"done/model={name}/{stem}.done"
             (args.out / done_rel).parent.mkdir(parents=True, exist_ok=True)
             (args.out / done_rel).write_text(json.dumps({
-                "n_prompts": len(prompts), "seconds": round(time.time() - t0, 1),
+                "n_prompts": len(prompts), "token_ids_sha256": ids_sha, **host_info(),
+                "seconds": round(time.time() - t0, 1),
                 "finished_utc": datetime.now(timezone.utc).isoformat()}))
             uploader.push(rel_files, done_rel)
             rate = (time.time() - t_start) / k

@@ -159,19 +159,20 @@ Notes:
 
 ### Phase 0: Decisions (you)
 
-- [ ] **Storage and compute:** Option A or B. *Recommendation: A, if GPU quota arrives.*
-- [ ] **GPU type:** A100 80 GB or H100. *Recommendation: whichever has quota or availability; H100 if the price is ≤ 2× A100.*
-- [ ] **Extra start-of-text token for Llama/Mistral:** keep (comparable with the pilot and all earlier data) or fix (standard usage). *Recommendation: keep, and note it in the methods.*
+- [x] **Storage and compute:** Option A (Google Cloud) — decided 2026-10-04, because the $300 trial credit only applies to Google. Vast.ai is the fallback if A100 spot capacity fails. Bucket `gs://intersectionality-data` in project `intersectionality-510622`; GPUs in project `intersectionality-compute`.
+- [x] **GPU type:** 1× A100 80 GB spot in us-central1 (quota approved 2026-10-04). One GPU type for the whole run; extraction and generation run one after the other.
+- [x] **Extra start-of-text token for Llama/Mistral:** keep (comparable with the pilot and all earlier data); note it in the methods.
 - [ ] **Tagging method** (Phase 5). *Recommendation: hybrid.*
 - [ ] **Budget ceiling and deadline,** so the plan can be checked against them.
 
 ### Phase 1: Code hardening (me, before any cloud spend)
 
-- [ ] Pin Hugging Face model revisions (commit hashes) in `extract.py` and `generate.py`, and record them in `run_info`.
-- [ ] Save a checksum of the prompt token IDs in each done marker, and have `check.py` confirm extract and generate match.
+- [x] Pin Hugging Face model revisions (commit hashes) in `extract.py` and `generate.py`, and record them in `run_info`. *(2026-10-04: pinned to the pilot's snapshots, which equal current `main`.)*
+- [x] Save a checksum of the prompt token IDs in each done marker, and have `check.py` confirm extract and generate match.
+- [x] Record hostname, GPU and driver in every done marker and `run_info`; `check.py` lists the setups each step ran on.
 - [ ] Pin the vLLM version in `requirements-generate.txt` after the smoke test confirms it works.
-- [ ] Apply the extra-token decision.
-- [ ] Commit `final_run/` to git, so the VM clones a fixed version and `run_info` records the commit hash.
+- [x] Apply the extra-token decision (keep: no code change).
+- [x] Commit `final_run/` to git, so the VM clones a fixed version and `run_info` records the commit hash.
 
 ### Phase 2: Accounts and setup (you, with a runbook from me)
 
@@ -217,6 +218,16 @@ On one GPU VM with ~200 GB disk, in the bucket's region, with **two Python envir
   - **Agreement:** ≥ 99% between generated yes/no and P(yes).
   - **Cap hits:** < 0.5% of answers per model. If higher, rerun those rows with a higher cap.
 - [ ] **Shut down every GPU VM** and confirm in the console that nothing is still billing.
+
+### Phase 4b: Base models, activations only (after the instruct run)
+
+Decided 2026-10-04: base-vs-instruct at full scale runs as a separate step once Phase 4 is verified.
+
+- [ ] Models: `ibm-granite/granite-3.0-8b-base`, `meta-llama/Llama-3.1-8B`, `mistralai/Mistral-7B-v0.1`. Request Hugging Face access to the gated ones.
+- [ ] Activations + P(yes)/P(no) only; no reasoning generation (base models don't reliably follow the answer format).
+- [ ] Prompt format: match `pt2_test/extract_pairs_base_vs_instruct.py` (no chat template), so results are comparable with the pilot.
+- [ ] Estimate: +10–30 A100-hours (~$25–75 spot), +0.5–1.5 days on one GPU, +1.55 TB storage.
+- [ ] Same VM setup, bucket and checks; output under separate `model=` keys (e.g. `granite_base`).
 
 ### Phase 5: Outcome tagging (5.44M texts)
 

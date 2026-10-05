@@ -69,6 +69,19 @@ def main():
             if short:
                 ok = False
                 print(f"  {sub}: {len(short)} marker(s) from a smaller run (e.g. a smoke test): {short[:3]}")
+        markers = {sub: {f.stem: json.loads(f.read_text())
+                         for f in (args.out / sub / f"model={m}").glob("*.done")}
+                   for sub in ("done", "done_generate")}
+        both = sorted(markers["done"].keys() & markers["done_generate"].keys())
+        mismatch = [s for s in both if markers["done"][s].get("token_ids_sha256") is None
+                    or markers["done"][s].get("token_ids_sha256") != markers["done_generate"][s].get("token_ids_sha256")]
+        ok &= not mismatch
+        print(f"  token ids extract = generate: {len(both) - len(mismatch)} / {len(both)} groups"
+              + (f"  MISMATCH OR MISSING: {mismatch[:3]}" if mismatch else "  ok"))
+        for sub, step in (("done", "extract"), ("done_generate", "generate")):
+            setups = sorted({(d.get("gpu"), d.get("driver")) for d in markers[sub].values()}, key=str)
+            note = "" if len(setups) <= 1 else "  NOTE: more than one setup -- report it in the methods"
+            print(f"  {step} ran on (gpu, driver): {setups}{note}")
         for k, (have, want) in c.items():
             flag = "ok" if have == want else "MISSING"
             ok &= have == want

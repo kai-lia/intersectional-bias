@@ -43,7 +43,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-from transformers import AutoTokenizer
 
 import extract as fr
 
@@ -73,7 +72,8 @@ class VLLMBackend:
         import vllm
         from vllm import LLM, SamplingParams
         self.version = vllm.__version__
-        self.llm = LLM(model=fr.MODEL_IDS[name], dtype="bfloat16", seed=0, max_model_len=4096,
+        self.llm = LLM(model=fr.MODEL_IDS[name], revision=fr.MODEL_REVISIONS[name],
+                       tokenizer_revision=fr.MODEL_REVISIONS[name], dtype="bfloat16", seed=0, max_model_len=4096,
                        gpu_memory_utilization=0.90, enable_prefix_caching=True)
         self.params = SamplingParams(temperature=0.0, max_tokens=max_tokens)
 
@@ -180,7 +180,7 @@ def main():
         uploader.pull_done_markers("done_generate")
 
     for name in args.models:
-        tok = AutoTokenizer.from_pretrained(fr.MODEL_IDS[name])
+        tok = fr.load_tokenizer(name)
 
         if args.sample:
             rng = random.Random(0)
@@ -211,7 +211,8 @@ def main():
             continue
         backend = (VLLMBackend(name, args.max_tokens) if args.backend == "vllm"
                    else HFBackend(name, args.max_tokens, args.batch_size))
-        info = {"model": name, "model_id": fr.MODEL_IDS[name], "backend": args.backend,
+        info = {"model": name, "model_id": fr.MODEL_IDS[name], "model_revision": fr.MODEL_REVISIONS[name],
+                **fr.host_info(), "backend": args.backend,
                 "backend_version": backend.version, "max_tokens": args.max_tokens, "decoding": "greedy",
                 "inputs_sha256": {p.name: fr.sha256(p) for p in (fr.IDENTITIES_CSV, fr.TEMPLATES_CSV)},
                 "git_commit": fr.git_commit(), "started_utc": datetime.now(timezone.utc).isoformat()}
@@ -223,7 +224,8 @@ def main():
         for k, (pid, w, template) in enumerate(todo, 1):
             t0 = time.time()
             prompts = fr.build_prompts(template, identities, single_phrase, pairs, combo_phrase)
-            recs = records(meta, backend.generate(prompt_token_ids(tok, prompts)))
+            ids = prompt_token_ids(tok, prompts)
+            recs = records(meta, backend.generate(ids))
             stem = f"p{pid:02d}_w{w}"
             rel = f"generations/model={name}/{stem}.jsonl.gz"
             write_jsonl_gz(args.out / rel, recs)
@@ -231,7 +233,8 @@ def main():
             done_rel = f"done_generate/model={name}/{stem}.done"
             (args.out / done_rel).parent.mkdir(parents=True, exist_ok=True)
             (args.out / done_rel).write_text(json.dumps({
-                "n_prompts": len(recs), "hit_cap": n_len, "seconds": round(time.time() - t0, 1),
+                "n_prompts": len(recs), "token_ids_sha256": fr.token_ids_sha256(ids), **fr.host_info(),
+                "hit_cap": n_len, "seconds": round(time.time() - t0, 1),
                 "finished_utc": datetime.now(timezone.utc).isoformat()}))
             uploader.push([rel], done_rel)
             eta = (time.time() - t_start) / k * (len(todo) - k) / 3600
