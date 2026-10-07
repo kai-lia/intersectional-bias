@@ -131,7 +131,9 @@ dryrun)
   fi
   echo "== 2/5 waiting for SSH"
   wait_ssh "$DRY_NAME" "$Z"
-  echo "== 3/5 on the VM: identity, sudo, clone, real setup script (no GPU), preflight (bucket, inputs, disk)"
+  echo "== 3/5 stop alert for $DRY_NAME (created now so it sees the VM running before the stop)"
+  make_alert "$DRY_NAME" "$EMAIL"
+  echo "== 4/5 on the VM: identity, sudo, clone, real setup script (no GPU), preflight (bucket, inputs, disk)"
   gcloud compute ssh "$DRY_NAME" --zone="$Z" --quiet --command='
     set -e
     echo "service account on the VM: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email)"
@@ -144,8 +146,6 @@ dryrun)
     ls -la /usr/local/bin/idle_shutdown.sh /etc/cron.d/idle-shutdown /sbin/shutdown
     echo "ON-VM DRY RUN PASSED"
   ' || { echo "DRY RUN FAILED on the VM. Paste the output above to Claude. (bash ctl.sh dryrun EMAIL again resumes where it stopped.)"; exit 1; }
-  echo "== 4/5 stop alert for $DRY_NAME"
-  make_alert "$DRY_NAME" "$EMAIL"
   echo "== 5/5 stopping the VM with the real stop flag"
   gcloud compute instances stop "$DRY_NAME" --zone="$Z" --discard-local-ssd=true
   echo
