@@ -70,6 +70,7 @@ every edit made to them.
 - **Known, intentionally unchanged:**
   - The legacy `data/templates/combined_neostigmas.csv`, used by all earlier results, has the same bug in 1,111 pairs. → Limitations section.
   - Time words ("previously"/"currently") kept: they distinguish 30 of 38 identities.
+  - No-identity base prompt kept as the pilot built it (decided 2026-10-06), although 145 of 148 template-wordings read e.g. "a person who is someone." → note in the methods.
   - 68 missing ordered pairs are deliberate synonym exclusions.
 
 ### 3.4 Reasoning generation (256 prompts per model, uncapped)

@@ -57,6 +57,11 @@ outputs/
   checks/disagreements_model={m}.csv                rows where the generated yes/no disagrees with P(yes)
 ```
 
+Each done marker records the prompt count, a SHA-256 of the group's prompt token IDs, and the hostname, GPU and
+driver it ran on. `check.py` requires the extract and generate token digests to match for every group, and lists
+the (GPU, driver) setups each step used. Models load from pinned Hugging Face commits (`MODEL_REVISIONS` in
+`extract.py`, the snapshots the pilot used); `run_info` records the pinned and the actually loaded revision.
+
 All per-prompt files list rows in the same order: `[base, 111 singles, 12,142 pairs]`. Row *i* of a
 generation file is row *i* of the matching readout file and of every activation file for that template-wording.
 Each generation row holds `row, kind, stigma1, stigma2, text, answer, answer_at_start, has_reasoning, n_tokens, finish`.

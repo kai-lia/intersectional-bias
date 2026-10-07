@@ -127,7 +127,7 @@ def main():
         t_start = time.time()
         for k, (pid, w, template) in enumerate(todo, 1):
             prompts = [fr.base_prompt(template)] + [fr.fill(template, r[5]) for r in rows[1:]]
-            hidden, logp = fr.run_group(prompts, model, tok, args.batch_size or auto_batch, yes_ids, no_ids)
+            hidden, logp, _ = fr.run_group(prompts, model, tok, args.batch_size or auto_batch, yes_ids, no_ids)
             p = np.exp(logp)
             fr.atomic_savez(out_dir / f"p{pid:02d}_w{w}.npz", pattern_id=pid, wording_id=w, **cols,
                             layers=np.array(LAYERS[name]), hidden=hidden[[l - 1 for l in LAYERS[name]]],
