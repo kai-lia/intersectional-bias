@@ -14,8 +14,8 @@
 # (never to the real final_run/ prefix).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-sudo touch /var/tmp/final_run_busy                   # idle shutdown stays off while this runs
-trap 'sudo rm -f /var/tmp/final_run_busy' EXIT
+sudo touch /run/final_run_busy                       # idle shutdown stays off while this runs
+trap 'sudo rm -f /run/final_run_busy' EXIT
 EX=~/venvs/extract/bin/python
 GEN=~/venvs/generate/bin/python
 OUT=outputs_smoke
@@ -58,6 +58,7 @@ until [[ -f "$OUT/resume/done/model=granite/p01_w0.done" ]]; do
 done
 sleep 15                                   # first group's upload is in flight, second is computing
 kill -9 "$pid"; wait "$pid" 2>/dev/null || true
+pkill -9 -f "rclone move" || true; sleep 2            # a real preemption kills the upload too
 echo "killed mid-run (like a spot interruption); files left locally: $(find "$OUT/resume" -name '*.npz' | wc -l)"
 echo "restarting the same command"
 $EX extract.py "${RES[@]}" > "$OUT/resume_run2.log" 2>&1

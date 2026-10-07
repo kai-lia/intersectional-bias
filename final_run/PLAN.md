@@ -178,19 +178,19 @@ Notes:
 
 ### Phase 2: Accounts and setup (you, with a runbook from me)
 
-- [ ] **Option A:**
-  - Create a GCP project.
-  - **Request GPU quota now**, in one region.
-  - Create a GCS bucket in that region with **soft delete / object versioning on**.
+- [x] **Option A** (done 2026-10-04):
+  - Projects `intersectionality-510622` (storage) and `intersectionality-compute` (GPUs).
+  - GPU quota: 1× Preemptible A100 80GB in us-central1, approved.
+  - Bucket `gs://intersectionality-data` in us-central1: Autoclass, uniform access, soft delete 7 d, versioning (2 versions, expire after 9 d).
 - [ ] **Option B:**
   - Vast.ai account with ~$50 credit.
   - R2 or B2 bucket with versioning.
-- [ ] **Billing alerts and caps:** e.g. alerts at $100 / $250 / $400.
-- [ ] **Credentials:**
-  - Accept the Llama 3.1 license on Hugging Face.
-  - Create a **read-only** HF token.
-  - Create a bucket key **scoped to this bucket only**.
-- [ ] **rclone remote** configured. Test with `rclone lsd`.
+- [x] **Billing alerts:** $50/month on the storage project, $500/month on the compute project (alerts only; spend caps cannot cover Compute Engine).
+- [x] **Credentials:**
+  - Llama 3.1 access accepted (collection covers instruct and base); Mistral and Granite are open.
+  - Read-only HF token `final-run-vm` in the password manager; entered once on the VM (`hf auth login`).
+  - No bucket key: the VM runs as service account `code-runner`, Storage Object Admin on this bucket only.
+- [x] **rclone remote:** configured and tested on the VM by `vm/setup_vm.sh` (uses the VM's service account).
 
 ### Phase 3: Cloud smoke test (~$5–15)
 

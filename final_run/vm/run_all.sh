@@ -37,10 +37,9 @@ EOF
   exit 0
 fi
 
-sudo rm -f /var/tmp/final_run_busy
 [[ -f ~/FINISHED ]] && { echo "~/FINISHED exists: nothing to do"; exit 0; }
 [[ -f ~/HOLD ]] && { echo "~/HOLD exists: not starting"; exit 0; }
-sudo touch /var/tmp/final_run_busy                   # idle shutdown stays off while the run is active
+sudo touch /run/final_run_busy                       # idle shutdown stays off while the run is active (/run is cleared at boot)
 mkdir -p ~/run_logs
 LOG=~/run_logs/run_$(date -u +%Y%m%d_%H%M%S).log
 exec >>"$LOG" 2>&1
@@ -49,7 +48,10 @@ for i in $(seq 1 30); do nvidia-smi >/dev/null 2>&1 && break; sleep 20; done
 
 status=0
 echo "=== preflight $(date -u)"
-bash vm/preflight.sh "$REMOTE" || status=$?
+for attempt in 1 2 3; do                             # the network can still be coming up right after boot
+  bash vm/preflight.sh "$REMOTE" && { status=0; break; } || status=$?
+  echo "preflight attempt $attempt failed; retrying in 60 s"; sleep 60
+done
 if [[ $status -eq 0 ]]; then
   echo "=== extract $(date -u)"
   ~/venvs/extract/bin/python extract.py --remote "$REMOTE" || status=$?
@@ -70,5 +72,5 @@ fi
 echo "=== exit status $status $(date -u)"
 [[ $status -eq 0 ]] && touch ~/FINISHED && echo "=== FINISHED"
 rclone copy ~/run_logs "$REMOTE/logs"
-sudo rm -f /var/tmp/final_run_busy
+sudo rm -f /run/final_run_busy
 sudo shutdown -h now

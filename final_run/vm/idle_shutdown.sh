@@ -3,10 +3,10 @@
 # after 3 checks in a row (~30 min) with no process on the GPU and nobody
 # logged in over SSH, so a finished or forgotten VM stops billing for the GPU.
 # Never fires in the first 30 minutes after boot, and never while
-# /var/tmp/final_run_busy exists (run_all.sh and smoke_test.sh create it).
+# /run/final_run_busy exists (run_all.sh and smoke_test.sh create it; /run is cleared at boot).
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 STATE=/var/tmp/idle_count
-BUSY=/var/tmp/final_run_busy
+BUSY=/run/final_run_busy
 uptime_s=$(cut -d. -f1 /proc/uptime)
 if [ "$uptime_s" -lt 1800 ] || [ -f "$BUSY" ]; then echo 0 > "$STATE"; exit 0; fi
 gpu_jobs=$(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | grep -c . || true)

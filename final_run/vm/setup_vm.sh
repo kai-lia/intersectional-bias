@@ -41,7 +41,8 @@ fi
 
 echo "== 5/7 rclone -> bucket (uses the VM's code-runner account, no key file)"
 command -v rclone >/dev/null || curl -s https://rclone.org/install.sh | sudo bash >/dev/null
-rclone config create gcs "google cloud storage" env_auth=true bucket_policy_only=true no_check_bucket=true >/dev/null
+rclone listremotes | grep -qx "gcs:" || \
+  rclone config create gcs "google cloud storage" env_auth=true bucket_policy_only=true no_check_bucket=true >/dev/null
 echo "rclone test $(date)" > /tmp/rclone_test.txt
 rclone copy /tmp/rclone_test.txt "$REMOTE_TEST/"
 rclone ls "$REMOTE_TEST/"
