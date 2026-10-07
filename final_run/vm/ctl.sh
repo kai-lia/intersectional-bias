@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Control the final-run GPU VM from Cloud Shell.
 #
-#   bash ctl.sh dryrun EMAIL   ~10 min, a few cents: a tiny CPU spot VM created with the SAME flags, image
+#   bash ctl.sh dryrun EMAIL   ~15 min, a few cents: a small CPU spot VM created with the SAME flags, image
 #                              and service account as the A100 VM runs the real setup script (minus GPU),
-#                              the bucket checks and the stop alert, then is stopped with the real stop flag
+#                              the bucket checks and the stop alert, then is stopped with the real stop flag;
+#                              rerunning it resumes (restarts the VM if it was preempted)
 #   bash ctl.sh dryrun-cleanup delete the dry-run VM and its alert (after the alert email arrived)
 #   bash ctl.sh create         create the spot A100 VM (tries each us-central1 zone that has A100 80GB)
 #   bash ctl.sh alert EMAIL    email EMAIL whenever the A100 VM stops (preemption, 48 h limit, finished, by hand)
@@ -115,11 +116,19 @@ delete_alert() {       # VMNAME
 case "${1:-}" in
 dryrun)
   EMAIL="${2:?usage: bash ctl.sh dryrun you@example.com}"
-  exists "$DRY_NAME" && { echo "$DRY_NAME already exists; run: bash ctl.sh dryrun-cleanup"; exit 1; }
-  echo "== 1/5 creating a CPU spot VM with the A100 VM's flags (n2-standard-2 + 1 local SSD, 1 h limit)"
-  create_vm "$DRY_NAME" n2-standard-2 100 1h --local-ssd=interface=NVME \
-    || { echo "DRY RUN FAILED at VM creation. Paste the error above to Claude."; exit 1; }
-  Z=$(zone_of "$DRY_NAME")
+  if exists "$DRY_NAME"; then
+    Z=$(zone_of "$DRY_NAME")
+    ST=$(gcloud compute instances describe "$DRY_NAME" --zone="$Z" --format="value(status)")
+    echo "== 1/5 $DRY_NAME already exists ($ST): resuming. What happened to it last:"
+    gcloud compute operations list --filter="targetLink~/$DRY_NAME" --sort-by=~insertTime --limit=4 \
+      --format="table(operationType,insertTime.date('%H:%M:%S'),status)"
+    [[ "$ST" == RUNNING ]] || gcloud compute instances start "$DRY_NAME" --zone="$Z"
+  else
+    echo "== 1/5 creating a CPU spot VM with the A100 VM's flags (n2-standard-4 + 1 local SSD, 1 h limit)"
+    create_vm "$DRY_NAME" n2-standard-4 100 1h --local-ssd=interface=NVME \
+      || { echo "DRY RUN FAILED at VM creation. Paste the error above to Claude."; exit 1; }
+    Z=$(zone_of "$DRY_NAME")
+  fi
   echo "== 2/5 waiting for SSH"
   wait_ssh "$DRY_NAME" "$Z"
   echo "== 3/5 on the VM: identity, sudo, clone, real setup script (no GPU), preflight (bucket, inputs, disk)"
@@ -128,12 +137,13 @@ dryrun)
     echo "service account on the VM: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email)"
     sudo -n true && echo "passwordless sudo: ok"
     [[ -d intersectional-bias ]] || git clone -q -b final-run '"$REPO"'
-    cd intersectional-bias/final_run
+    cd intersectional-bias/final_run && git pull -q
+    echo "memory: $(free -g | awk "/Mem:/ {print \$2}") GB; last kernel OOM/shutdown lines, if any:"; sudo dmesg 2>/dev/null | grep -iE "out of memory|killed process|shutdown" | tail -3 || true
     DRYRUN=1 bash vm/setup_vm.sh
     DRYRUN=1 bash vm/preflight.sh gcs:intersectionality-data/smoke/_dryrun
     ls -la /usr/local/bin/idle_shutdown.sh /etc/cron.d/idle-shutdown /sbin/shutdown
     echo "ON-VM DRY RUN PASSED"
-  ' || { echo "DRY RUN FAILED on the VM. Paste the output above to Claude."; exit 1; }
+  ' || { echo "DRY RUN FAILED on the VM. Paste the output above to Claude. (bash ctl.sh dryrun EMAIL again resumes where it stopped.)"; exit 1; }
   echo "== 4/5 stop alert for $DRY_NAME"
   make_alert "$DRY_NAME" "$EMAIL"
   echo "== 5/5 stopping the VM with the real stop flag"
