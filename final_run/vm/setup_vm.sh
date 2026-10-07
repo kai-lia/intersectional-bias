@@ -31,16 +31,27 @@ export PATH="$HOME/.local/bin:$PATH"
 uv python install 3.11
 
 echo "== 4/7 environments (~10 min)"
-[[ -x ~/venvs/extract/bin/python ]] || uv venv --python 3.11 --seed ~/venvs/extract
-~/venvs/extract/bin/pip install -q -r requirements.txt
-[[ -x ~/venvs/generate/bin/python ]] || uv venv --python 3.11 --seed ~/venvs/generate
-~/venvs/generate/bin/pip install -q -r requirements-generate.txt
+make_env() {   # NAME REQUIREMENTS "modules": create ~/venvs/NAME if missing, install, prove it imports.
+               # A VM that loses power mid-install (spot preemption) can be left with truncated
+               # files that pip still considers installed, so a broken env is rebuilt once from scratch.
+  local name=$1 req=$2 mods=$3 venv=~/venvs/$1 attempt
+  for attempt in 1 2; do
+    [[ -x "$venv/bin/python" ]] || uv venv --python 3.11 --seed "$venv"
+    "$venv/bin/pip" install -q -r "$req"
+    "$venv/bin/python" -c "import $mods" 2>/tmp/import_err.txt && return 0
+    echo "   $name environment is broken: $(tail -1 /tmp/import_err.txt)"
+    [[ $attempt == 1 ]] && { echo "   rebuilding it from scratch"; rm -rf "$venv"; }
+  done
+  echo "the $name environment still does not import after a rebuild"; return 1
+}
+make_env extract requirements.txt "torch, transformers"
 if [[ -n "$DRYRUN" ]]; then
+  make_env generate requirements-generate.txt "vllm, torch, transformers" \
+    || echo "NOTE: vllm does not import on this CPU-only VM; it is checked for real on the A100"
   ~/venvs/extract/bin/python -c "import torch, transformers; print('extract  env: torch', torch.__version__, '| transformers', transformers.__version__, '(CPU-only dry run)')"
   ~/venvs/generate/bin/python -c "import torch, transformers; print('generate env: torch', torch.__version__, '| transformers', transformers.__version__, '(CPU-only dry run)')"
-  ~/venvs/generate/bin/python -c "import vllm; print('generate env: vllm', vllm.__version__, 'imports on CPU')" \
-    || echo "NOTE: vllm did not import on this CPU-only VM; it is checked for real on the A100"
 else
+  make_env generate requirements-generate.txt "vllm, torch, transformers"
   ~/venvs/extract/bin/python -c "import torch, transformers; print('extract  env: torch', torch.__version__, '| transformers', transformers.__version__); assert torch.cuda.is_available(), 'extract env cannot see the GPU'"
   ~/venvs/generate/bin/python -c "import vllm, torch, transformers; print('generate env: vllm', vllm.__version__, '| torch', torch.__version__, '| transformers', transformers.__version__); assert torch.cuda.is_available(), 'generate env cannot see the GPU'"
 fi
@@ -86,4 +97,5 @@ for m, repo in fr.MODEL_IDS.items():
     print(f"access ok: {repo}@{fr.MODEL_REVISIONS[m][:8]}")
 EOF
 
-echo; echo "${DRYRUN:+DRY-RUN }SETUP COMPLETE.${DRYRUN:- Next: bash vm/smoke_test.sh (inside tmux)}"
+echo
+if [[ -n "$DRYRUN" ]]; then echo "DRY-RUN SETUP COMPLETE."; else echo "SETUP COMPLETE. Next: bash vm/smoke_test.sh (inside tmux)"; fi
