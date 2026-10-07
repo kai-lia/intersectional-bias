@@ -171,7 +171,8 @@ Notes:
 - [x] Pin Hugging Face model revisions (commit hashes) in `extract.py` and `generate.py`, and record them in `run_info`. *(2026-10-04: pinned to the pilot's snapshots, which equal current `main`.)*
 - [x] Save a checksum of the prompt token IDs in each done marker, and have `check.py` confirm extract and generate match.
 - [x] Record hostname, GPU and driver in every done marker and `run_info`; `check.py` lists the setups each step ran on.
-- [ ] Pin the vLLM version in `requirements-generate.txt` after the smoke test confirms it works.
+- [x] Pin the vLLM version in `requirements-generate.txt`: `vllm==0.23.0` with `transformers==4.57.6`, the last vLLM that accepts transformers 4.x, so both steps tokenize with identical code (2026-10-06; the smoke test confirms it runs).
+- [x] `generate.py` refuses a group unless `extract.py` finished it with the same token-id digest (fail-fast; `check.py` still verifies afterwards).
 - [x] Apply the extra-token decision (keep: no code change).
 - [x] Commit `final_run/` to git, so the VM clones a fixed version and `run_info` records the commit hash.
 
@@ -192,6 +193,8 @@ Notes:
 - [ ] **rclone remote** configured. Test with `rclone lsd`.
 
 ### Phase 3: Cloud smoke test (~$5–15)
+
+All of the checks below are scripted in `vm/smoke_test.sh`; follow `RUNBOOK.md` sections A–D.
 
 On one GPU VM with ~200 GB disk, in the bucket's region, with **two Python environments** (`.venv-extract`, `.venv-generate`), inside `tmux`:
 
@@ -305,6 +308,8 @@ Manual tagging is impossible at this scale. The options:
 | `final_run/check.py` | Completeness, hashes, alignment, agreement, cap hits |
 | `final_run/inputs/` | Frozen identities and templates + `SHA256SUMS` |
 | `final_run/README.md` | Scope, output layout, run commands, generation notes |
+| `final_run/RUNBOOK.md` | Step-by-step Google Cloud commands: VM, setup, smoke test, full run, teardown |
+| `final_run/vm/` | `ctl.sh` (Cloud Shell), `setup_vm.sh`, `smoke_test.sh`, `run_all.sh`, idle shutdown, Mac reference vectors |
 | `final_run/requirements.txt` / `requirements-generate.txt` | The two separate environments |
 | `ablations/temporal_marker/` | Optional time-word test (not run) |
 | `data/templates/final_clean/*.bak_*` | Backups from before the input edits |

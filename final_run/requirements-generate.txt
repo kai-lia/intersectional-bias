@@ -1,7 +1,10 @@
 # generate.py --backend vllm, in its OWN environment (vLLM pins its own torch).
-# Install on the CUDA machine; the exact versions used are written to
-# outputs/run_info/generate_model={m}.json.
-vllm
-transformers
-pandas
-numpy
+# vllm 0.23.0 (2026-06-15) is the last release that accepts transformers 4.x; it is
+# pinned together with the same transformers as requirements.txt so extract.py and
+# generate.py tokenize with identical code.  Newer vLLM needs transformers 5.x.
+# The exact versions used are written to outputs/run_info/generate_model={m}.json.
+vllm==0.23.0
+transformers==4.57.6
+huggingface_hub==0.36.2
+pandas==3.0.1
+numpy==2.4.3

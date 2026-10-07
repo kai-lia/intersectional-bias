@@ -62,6 +62,10 @@ driver it ran on. `check.py` requires the extract and generate token digests to 
 the (GPU, driver) setups each step used. Models load from pinned Hugging Face commits (`MODEL_REVISIONS` in
 `extract.py`, the snapshots the pilot used); `run_info` records the pinned and the actually loaded revision.
 
+Before generating a group, `generate.py` reads `extract.py`'s done marker and exits if the marker is missing or its
+token-id digest differs, so a tokenizer difference costs one model load instead of a whole generation pass.
+`requirements-generate.txt` pins `vllm==0.23.0` with the same `transformers` as `requirements.txt` for that reason.
+
 All per-prompt files list rows in the same order: `[base, 111 singles, 12,142 pairs]`. Row *i* of a
 generation file is row *i* of the matching readout file and of every activation file for that template-wording.
 Each generation row holds `row, kind, stigma1, stigma2, text, answer, answer_at_start, has_reasoning, n_tokens, finish`.

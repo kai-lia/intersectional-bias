@@ -115,6 +115,21 @@ class HFBackend:
         return out
 
 
+def require_same_inputs(marker: Path, ids, n_expected: int, name: str, stem: str):
+    """Refuse to generate a group unless extract.py finished it with the very
+    same token ids.  Catching a tokenizer difference here costs one model load;
+    catching it in check.py afterwards would cost the whole generation pass."""
+    if not fr.is_done(marker, n_expected):
+        sys.exit(f"[{name}] {stem}: extract.py has not finished this group (no valid {marker}); "
+                 f"run extract.py first so the rows are aligned")
+    expect = json.loads(marker.read_text()).get("token_ids_sha256")
+    got = fr.token_ids_sha256(ids)
+    if expect != got:
+        sys.exit(f"[{name}] {stem}: prompt token ids differ from extract.py's "
+                 f"(extract {str(expect)[:12]}, generate {got[:12]}). The two environments tokenize "
+                 f"differently (transformers/tokenizer versions?). Nothing generated; fix this first.")
+
+
 def write_jsonl_gz(path: Path, records):
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
@@ -178,6 +193,7 @@ def main():
     if not args.sample:
         uploader.flush_leftovers(["generations"], "done_generate")
         uploader.pull_done_markers("done_generate")
+        uploader.pull_done_markers("done")            # extract.py's markers, for the token-id check
 
     for name in args.models:
         tok = fr.load_tokenizer(name)
@@ -223,10 +239,11 @@ def main():
         t_start = time.time()
         for k, (pid, w, template) in enumerate(todo, 1):
             t0 = time.time()
+            stem = f"p{pid:02d}_w{w}"
             prompts = fr.build_prompts(template, identities, single_phrase, pairs, combo_phrase)
             ids = prompt_token_ids(tok, prompts)
+            require_same_inputs(args.out / "done" / f"model={name}" / f"{stem}.done", ids, len(meta), name, stem)
             recs = records(meta, backend.generate(ids))
-            stem = f"p{pid:02d}_w{w}"
             rel = f"generations/model={name}/{stem}.jsonl.gz"
             write_jsonl_gz(args.out / rel, recs)
             n_len = sum(r["finish"] == "length" for r in recs)
