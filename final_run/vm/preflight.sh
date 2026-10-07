@@ -9,8 +9,10 @@ EX=~/venvs/extract/bin/python
 GEN=~/venvs/generate/bin/python
 fail() { echo "PREFLIGHT FAILED: $*"; exit 1; }
 ok() { echo "  ok  $*"; }
-echo "== preflight ($(date -u +%FT%TZ)) for $REMOTE"
+DRYRUN="${DRYRUN:-}"
+echo "== preflight ($(date -u +%FT%TZ)) for $REMOTE${DRYRUN:+  (dry run: GPU and Hugging Face checks skipped)}"
 
+if [[ -z "$DRYRUN" ]]; then
 # 1. the GPU we planned for
 gpu=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1) || fail "nvidia-smi not working"
 [[ -n "$gpu" ]] || fail "no GPU visible"
@@ -24,6 +26,7 @@ $GEN -c "import torch, vllm; assert torch.cuda.is_available(), 'no CUDA'" 2>/dev
 tf_a=$($EX -c "import transformers; print(transformers.__version__)"); tf_b=$($GEN -c "import transformers; print(transformers.__version__)")
 [[ "$tf_a" == "$tf_b" ]] || fail "transformers differs between environments ($tf_a vs $tf_b); token ids would not match"
 ok "CUDA usable in both environments; transformers $tf_a in both"
+fi
 
 # 3. the bucket: write, read back, delete
 probe="$REMOTE/_preflight/$(hostname)_$(date +%s).txt"
@@ -34,7 +37,7 @@ rclone deletefile "$probe" 2>/dev/null || fail "cannot delete in $REMOTE"
 ok "bucket write/read/delete"
 
 # 4. Hugging Face: logged in, pinned models reachable (cache first, network only if needed)
-$EX - <<'EOF' || fail "Hugging Face token or model access"
+[[ -n "$DRYRUN" ]] || $EX - <<'EOF' || fail "Hugging Face token or model access"
 from huggingface_hub import whoami, hf_hub_download
 import extract as fr
 whoami()
@@ -44,7 +47,7 @@ for m, repo in fr.MODEL_IDS.items():
     except Exception:
         hf_hub_download(repo, "config.json", revision=fr.MODEL_REVISIONS[m])
 EOF
-ok "Hugging Face token valid; all three pinned models reachable"
+[[ -n "$DRYRUN" ]] || ok "Hugging Face token valid; all three pinned models reachable"
 
 # 5. inputs untouched, code committed and current
 (cd inputs && sha256sum -c --quiet SHA256SUMS) || fail "inputs/ do not match SHA256SUMS"

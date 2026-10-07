@@ -23,7 +23,7 @@ Scripts are in `final_run/vm/`:
 
 | Script | Runs in | Purpose |
 |---|---|---|
-| `ctl.sh` | Cloud Shell | create / ssh / status / start / stop / log / bucket / alert / delete |
+| `ctl.sh` | Cloud Shell | dryrun / create / ssh / status / start / stop / log / bucket / alert / delete |
 | `preflight.sh` | VM | sanity checks before any GPU time: GPU, both environments, bucket, Hugging Face, inputs, disk |
 | `setup_vm.sh` | VM | Python, both environments, rclone, idle shutdown, Hugging Face login |
 | `smoke_test.sh` | VM | the Phase 3 checks + a measured time and cost estimate |
@@ -37,6 +37,7 @@ Scripts are in `final_run/vm/`:
 In **Intersectionality-compute → IAM & Admin → Quotas & System Limits**, filter by `us-central1` and confirm:
 - **Preemptible NVIDIA A100 80GB GPUs** = 1 (done)
 - **Persistent Disk SSD (GB)** ≥ 250 (the boot disk; new projects usually get 500+). If it's lower, request 500.
+- **Local SSD (GB)** and, if listed, **Preemptible Local SSD (GB)** ≥ 375 (the A100 machine comes with one; the dry run uses one too).
 
 A2 machines need no CPU quota.
 
@@ -51,6 +52,21 @@ A2 machines need no CPU quota.
    ```
    If you've cloned before, update instead: `cd ~/intersectional-bias && git pull && cd final_run/vm`.
 
+## B0. Dry run first (~10 min, a few cents)
+
+Before any GPU is touched, this proves the Google Cloud side works: it creates a tiny CPU spot VM with
+**the same flags, image and service account** as the A100 VM, runs the real `setup_vm.sh` on it (minus the
+GPU parts), checks the bucket with the VM's own identity, creates the stop alert, and stops the VM with the
+real stop flag. Nothing from this run goes near the A100 or the real data.
+
+```bash
+bash ctl.sh dryrun you@example.com
+```
+- Success ends with **`DRY RUN PASSED`**. Within ~15 minutes an email titled *final-run VM stopped: final-run-dryrun*
+  should arrive. That email is the proof that the stop alert works.
+- Then: `bash ctl.sh dryrun-cleanup` (deletes the dry-run VM and its alert).
+- Any `DRY RUN FAILED` or error: paste the output to Claude. Rerun after `bash ctl.sh dryrun-cleanup`.
+
 ## B. Create the VM
 
 ```bash
@@ -61,11 +77,11 @@ bash ctl.sh create
 - `No zone had a spot A100 80GB available`: no capacity right now. Wait 15–30 min and run it again.
 - Any other error: paste it to Claude.
 
-2. **Create the stop alert** (once; replace the address with yours):
+2. **Create the stop alert** (once; same address as the dry run):
    ```bash
    bash ctl.sh alert you@example.com
    ```
-   From now on you get an email about 10 minutes after the VM stops, whatever the reason, and another when it
+   From now on you get an email about 10 minutes after the A100 VM stops, whatever the reason, and another when it
    runs again. A stop you did yourself also emails you; that's a useful confirmation that the GPU is off.
 
 ## C. Set up the VM (~15 min, once)

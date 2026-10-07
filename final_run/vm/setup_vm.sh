@@ -2,13 +2,20 @@
 # One-time setup on the GPU VM.  Run from the repo:
 #   cd ~/intersectional-bias/final_run && bash vm/setup_vm.sh
 # Safe to rerun.  Takes ~10-15 minutes (mostly pip installing torch and vLLM).
+# DRYRUN=1 (set by `ctl.sh dryrun`, on a CPU-only VM) skips the driver wait, the
+# CUDA checks and the Hugging Face login; everything else runs for real.
 set -euo pipefail
+DRYRUN="${DRYRUN:-}"
 cd "$(dirname "$0")/.."
 REMOTE_TEST="gcs:intersectionality-data/smoke/_setup_test"
 
 echo "== 1/7 GPU driver"
-for i in $(seq 1 30); do nvidia-smi >/dev/null 2>&1 && break; echo "waiting for the NVIDIA driver ($i/30)..."; sleep 20; done
-nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv
+if [[ -n "$DRYRUN" ]]; then
+  echo "DRYRUN: CPU-only VM, skipping the driver wait"
+else
+  for i in $(seq 1 30); do nvidia-smi >/dev/null 2>&1 && break; echo "waiting for the NVIDIA driver ($i/30)..."; sleep 20; done
+  nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv
+fi
 
 echo "== 2/7 system tools"
 # first boot: wait for the image's own package updates to release the apt lock
@@ -28,8 +35,15 @@ echo "== 4/7 environments (~10 min)"
 ~/venvs/extract/bin/pip install -q -r requirements.txt
 [[ -x ~/venvs/generate/bin/python ]] || uv venv --python 3.11 --seed ~/venvs/generate
 ~/venvs/generate/bin/pip install -q -r requirements-generate.txt
-~/venvs/extract/bin/python -c "import torch, transformers; print('extract  env: torch', torch.__version__, '| transformers', transformers.__version__); assert torch.cuda.is_available(), 'extract env cannot see the GPU'"
-~/venvs/generate/bin/python -c "import vllm, torch, transformers; print('generate env: vllm', vllm.__version__, '| torch', torch.__version__, '| transformers', transformers.__version__); assert torch.cuda.is_available(), 'generate env cannot see the GPU'"
+if [[ -n "$DRYRUN" ]]; then
+  ~/venvs/extract/bin/python -c "import torch, transformers; print('extract  env: torch', torch.__version__, '| transformers', transformers.__version__, '(CPU-only dry run)')"
+  ~/venvs/generate/bin/python -c "import torch, transformers; print('generate env: torch', torch.__version__, '| transformers', transformers.__version__, '(CPU-only dry run)')"
+  ~/venvs/generate/bin/python -c "import vllm; print('generate env: vllm', vllm.__version__, 'imports on CPU')" \
+    || echo "NOTE: vllm did not import on this CPU-only VM; it is checked for real on the A100"
+else
+  ~/venvs/extract/bin/python -c "import torch, transformers; print('extract  env: torch', torch.__version__, '| transformers', transformers.__version__); assert torch.cuda.is_available(), 'extract env cannot see the GPU'"
+  ~/venvs/generate/bin/python -c "import vllm, torch, transformers; print('generate env: vllm', vllm.__version__, '| torch', torch.__version__, '| transformers', transformers.__version__); assert torch.cuda.is_available(), 'generate env cannot see the GPU'"
+fi
 TF_EXTRACT=$(~/venvs/extract/bin/python -c "import transformers; print(transformers.__version__)")
 TF_GENERATE=$(~/venvs/generate/bin/python -c "import transformers; print(transformers.__version__)")
 if [[ "$TF_EXTRACT" == "$TF_GENERATE" ]]; then
@@ -55,13 +69,15 @@ echo "*/10 * * * * root /usr/local/bin/idle_shutdown.sh" | sudo tee /etc/cron.d/
 echo "installed"
 
 echo "== 7/7 Hugging Face login"
-if ~/venvs/extract/bin/python -c "from huggingface_hub import whoami; whoami()" >/dev/null 2>&1; then
+if [[ -n "$DRYRUN" ]]; then
+  echo "DRYRUN: skipping the Hugging Face login (needs your token; done on the A100)"
+elif ~/venvs/extract/bin/python -c "from huggingface_hub import whoami; whoami()" >/dev/null 2>&1; then
   echo "already logged in as $(~/venvs/extract/bin/python -c 'from huggingface_hub import whoami; print(whoami()["name"])')"
 else
   echo "Paste the final-run-vm READ token (it will not show while you paste). Answer n to the git-credential question."
   ~/venvs/extract/bin/hf auth login
 fi
-~/venvs/extract/bin/python - <<'EOF'
+[[ -n "$DRYRUN" ]] || ~/venvs/extract/bin/python - <<'EOF'
 from huggingface_hub import hf_hub_download
 import extract as fr
 for m, repo in fr.MODEL_IDS.items():
@@ -70,4 +86,4 @@ for m, repo in fr.MODEL_IDS.items():
     print(f"access ok: {repo}@{fr.MODEL_REVISIONS[m][:8]}")
 EOF
 
-echo; echo "SETUP COMPLETE. Next: bash vm/smoke_test.sh (inside tmux)"
+echo; echo "${DRYRUN:+DRY-RUN }SETUP COMPLETE.${DRYRUN:- Next: bash vm/smoke_test.sh (inside tmux)}"
