@@ -58,7 +58,8 @@ ok "inputs match checksums; working tree clean at $(git rev-parse --short HEAD)"
 
 # 6. room on the boot disk
 free_gb=$(df -BG --output=avail "$HOME" | tail -1 | tr -dc 0-9)
-[[ "$free_gb" -ge 60 ]] || fail "only ${free_gb} GB free on the boot disk (need >= 60 for models and in-flight groups)"
+need_gb=60; [[ -n "$DRYRUN" ]] && need_gb=20      # the dry-run VM has a 100 GB disk; the A100 has 250 GB
+[[ "$free_gb" -ge "$need_gb" ]] || fail "only ${free_gb} GB free on the boot disk (need >= $need_gb for models and in-flight groups)"
 ok "${free_gb} GB free on disk"
 
 echo "== preflight passed"

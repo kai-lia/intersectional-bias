@@ -145,7 +145,8 @@ dryrun)
     DRYRUN=1 bash vm/preflight.sh gcs:intersectionality-data/smoke/_dryrun
     ls -la /usr/local/bin/idle_shutdown.sh /etc/cron.d/idle-shutdown /sbin/shutdown
     echo "ON-VM DRY RUN PASSED"
-  ' || { echo "DRY RUN FAILED on the VM. Paste the output above to Claude. (bash ctl.sh dryrun EMAIL again resumes where it stopped.)"; exit 1; }
+  ' || { gcloud compute instances stop "$DRY_NAME" --zone="$Z" --discard-local-ssd=true --quiet >/dev/null 2>&1 || true
+         echo "DRY RUN FAILED on the VM (VM stopped). Paste the output above to Claude. (bash ctl.sh dryrun EMAIL again resumes where it stopped.)"; exit 1; }
   echo "== 5/5 stopping the VM with the real stop flag"
   gcloud compute instances stop "$DRY_NAME" --zone="$Z" --discard-local-ssd=true
   echo
