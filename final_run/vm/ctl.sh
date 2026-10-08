@@ -24,7 +24,7 @@ SA="code-runner@intersectionality-compute.iam.gserviceaccount.com"
 BUCKET="gs://intersectionality-data"
 REPO="https://github.com/kai-lia/intersectional-bias.git"
 MAX_RUN="48h"          # each start of the A100 VM may run at most this long, then it stops itself
-ZONES=(us-central1-a us-central1-b us-central1-c)     # the us-central1 zones with A2 Ultra (A100 80GB)
+ZONES=(us-central1-a us-central1-c)     # us-central1 zones with A2 Ultra (A100 80GB); b does not offer it despite the docs
 IMAGE_PROJECT="deeplearning-platform-release"
 IMAGE_FAMILY="common-cu129-ubuntu-2204-nvidia-580"    # Google Deep Learning VM: driver 580 preinstalled
 
@@ -79,7 +79,7 @@ make_alert() {         # VMNAME EMAIL: email when the VM reports no uptime for 1
   if gcloud monitoring policies list --filter="displayName='$title'" --format="value(name)" | grep -q .; then
     echo "alert '$title' already exists"; return 0
   fi
-  channel=$(gcloud beta monitoring channels list --filter="type=email AND labels.email_address=$email" \
+  channel=$(gcloud beta monitoring channels list --filter="type=\"email\" AND labels.email_address=\"$email\"" \
               --format="value(name)" | head -1)
   [[ -n "$channel" ]] || channel=$(gcloud beta monitoring channels create --display-name="final-run email" \
       --type=email --channel-labels="email_address=$email" --format="value(name)")
