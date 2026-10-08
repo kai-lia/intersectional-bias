@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Cloud smoke test: ~1.5-2 GPU-hours (~$4-5 on spot).  Run on the VM inside tmux:
 #   cd ~/intersectional-bias/final_run
-#   bash vm/smoke_test.sh 2>&1 | tee ~/smoke.log
+#   bash vm/smoke_test.sh
+# It keeps its output in ~/smoke.log and copies that to the bucket every 2 minutes
+# (gs://intersectionality-data/smoke/logs/), so `bash ctl.sh smokelog` in Cloud Shell
+# shows how far it got, even after a preemption.
 #
 #   1  each model reproduces the Mac's vectors (cosine >= 0.999)
 #   2  uncapped length sample, 1000 prompts per model (does 512 tokens fit?)
@@ -13,14 +16,23 @@
 # Writes to outputs_smoke/ locally and gs://intersectionality-data/smoke/
 # (never to the real final_run/ prefix).
 set -euo pipefail
+SELF=$(realpath "$0")
 cd "$(dirname "$0")/.."
-sudo touch /run/final_run_busy                       # idle shutdown stays off while this runs
-trap 'sudo rm -f /run/final_run_busy' EXIT
+if [[ -t 1 ]]; then                                  # started from a terminal: keep a copy of everything in ~/smoke.log
+  [[ -f ~/smoke.log ]] && mv ~/smoke.log ~/smoke_"$(date -u +%Y%m%d_%H%M%S)".log
+  bash "$SELF" "$@" 2>&1 | tee ~/smoke.log; exit "${PIPESTATUS[0]}"
+fi
 EX=~/venvs/extract/bin/python
 GEN=~/venvs/generate/bin/python
 OUT=outputs_smoke
 REMOTE=gcs:intersectionality-data/smoke
 MODELS=(granite llama mistral)
+LOG=~/smoke.log                                      # written by the tee above (or by `... | tee ~/smoke.log`)
+LOG_REMOTE="$REMOTE/logs/smoke_$(date -u +%Y%m%d_%H%M%S).log"
+sudo touch /run/final_run_busy                       # idle shutdown stays off while this runs
+bash vm/log_sync.sh "$LOG" "$LOG_REMOTE" &           # bucket copy of the log every 2 min -> `bash ctl.sh smokelog`
+SYNC=$!
+trap 'kill $SYNC 2>/dev/null; sleep 2; bash vm/log_sync.sh "$LOG" "$LOG_REMOTE" --once; sudo rm -f /run/final_run_busy' EXIT
 step() { echo; echo "==================== $* ($(date -u +%H:%M) UTC)"; }
 
 step "0  preflight"

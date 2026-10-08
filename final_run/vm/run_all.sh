@@ -43,6 +43,8 @@ sudo touch /run/final_run_busy                       # idle shutdown stays off w
 mkdir -p ~/run_logs
 LOG=~/run_logs/run_$(date -u +%Y%m%d_%H%M%S).log
 exec >>"$LOG" 2>&1
+bash vm/log_sync.sh "$LOG" "$REMOTE/logs/$(basename "$LOG")" &   # bucket copy every 2 min -> `bash ctl.sh log`
+SYNC=$!
 echo "=== boot $(date -u) | $(git -C "$FINAL_RUN" log --oneline -1)"
 for i in $(seq 1 30); do nvidia-smi >/dev/null 2>&1 && break; sleep 20; done
 
@@ -71,6 +73,7 @@ fi
 
 echo "=== exit status $status $(date -u)"
 [[ $status -eq 0 ]] && touch ~/FINISHED && echo "=== FINISHED"
+kill $SYNC 2>/dev/null
 rclone copy ~/run_logs "$REMOTE/logs"
 sudo rm -f /run/final_run_busy
 sudo shutdown -h now

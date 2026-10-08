@@ -12,7 +12,8 @@
 #   bash ctl.sh status         VM state + what is still billing
 #   bash ctl.sh start          start it again (after a spot interruption or the 48 h limit)
 #   bash ctl.sh stop           stop it (GPU billing stops; the boot disk is kept, ~$0.85/day)
-#   bash ctl.sh log            last lines of the full-run log
+#   bash ctl.sh log            last lines of the full-run log (the bucket copy: works while the VM runs and after it stops)
+#   bash ctl.sh smokelog       last lines of the smoke-test log (same)
 #   bash ctl.sh bucket         how much is in the bucket
 #   bash ctl.sh delete         delete the A100 VM, its disk and its stop alert (end of the run)
 set -euo pipefail
@@ -68,6 +69,14 @@ wait_ssh() {           # VMNAME ZONE: wait until SSH works (first call also crea
     sleep 10
   done
   echo "SSH to $1 did not come up in 5 minutes" >&2; return 1
+}
+
+show_log() {           # BUCKET-PREFIX LINES: tail of the newest .log there (the VM copies its log every 2 minutes)
+  local f
+  f=$(gcloud storage ls "$1" 2>/dev/null | grep '\.log$' | sort | tail -1)
+  [[ -n "$f" ]] || { echo "no log under $1 yet"; return 1; }
+  echo "== $f (copied by the VM every 2 minutes, so up to 2 minutes behind)"
+  gcloud storage cat "$f" | tail -n "$2"
 }
 
 alert_title() { echo "final-run VM stopped: $1"; }
@@ -175,7 +184,8 @@ alert)  make_alert "$NAME" "${2:?usage: bash ctl.sh alert you@example.com}" ;;
 ssh)    Z=$(zone_of "$NAME"); gcloud compute ssh "$NAME" --zone="$Z" ;;
 start)  Z=$(zone_of "$NAME"); gcloud compute instances start "$NAME" --zone="$Z" ;;
 stop)   Z=$(zone_of "$NAME"); gcloud compute instances stop "$NAME" --zone="$Z" --discard-local-ssd=true ;;
-log)    Z=$(zone_of "$NAME"); gcloud compute ssh "$NAME" --zone="$Z" --command='tail -n 40 "$(ls -t ~/run_logs/*.log | head -1)"' ;;
+log)      show_log "$BUCKET/final_run/logs/" 40 ;;
+smokelog) show_log "$BUCKET/smoke/logs/" 60 ;;
 bucket) gcloud storage du -s "$BUCKET/final_run" --readable-sizes ;;
 status)
   echo "== VMs (RUNNING = billing)"; gcloud compute instances list --format="table(name,zone.basename(),status)"
@@ -188,5 +198,5 @@ delete)
   delete_alert "$NAME"
   echo "== anything left?"; gcloud compute instances list; gcloud compute disks list
   ;;
-*) sed -n '2,16p' "$0"; exit 1 ;;
+*) sed -n '2,18p' "$0"; exit 1 ;;
 esac

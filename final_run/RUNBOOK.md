@@ -28,6 +28,7 @@ Scripts are in `final_run/vm/`:
 | `setup_vm.sh` | VM | Python, both environments, rclone, idle shutdown, Hugging Face login |
 | `smoke_test.sh` | VM | the Phase 3 checks + a measured time and cost estimate |
 | `run_all.sh` | VM | the full run; starts on every boot and resumes |
+| `log_sync.sh` | VM | copies a running log to the bucket every 2 minutes (used by the two above) |
 | `reference.py` + `reference_*.npz` | VM | compare cloud vectors with the Mac's |
 
 ---
@@ -72,7 +73,7 @@ bash ctl.sh dryrun you@example.com
 ```bash
 bash ctl.sh create
 ```
-- It uses Google's Deep Learning VM image (NVIDIA driver 580 preinstalled) and tries zones a, b, c; zone f has no A100 80GB.
+- It uses Google's Deep Learning VM image (NVIDIA driver 580 preinstalled) and tries zones a and c; b and f have no A100 80GB.
 - Success ends with `Created final-run-a100 in us-central1-x`. **The GPU is now billing.**
 - `No zone had a spot A100 80GB available`: no capacity right now. Wait 15–30 min and run it again.
 - Any other error: paste it to Claude.
@@ -108,8 +109,12 @@ bash ctl.sh create
    ```bash
    tmux new -s smoke
    cd ~/intersectional-bias/final_run
-   bash vm/smoke_test.sh 2>&1 | tee ~/smoke.log
+   bash vm/smoke_test.sh
    ```
+   It keeps its output in `~/smoke.log` and copies that to the bucket every 2 minutes, so from Cloud Shell
+   `bash ctl.sh smokelog` shows how far it got, whether the VM is running, stopped or preempted.
+   It writes to `outputs_smoke/` on the VM and `gs://intersectionality-data/smoke/` in the bucket, never to the real
+   `final_run/` prefix. Delete the smoke data afterwards from Cloud Shell: `gcloud storage rm -r gs://intersectionality-data/smoke`.
 2. You can watch it, or detach with **Ctrl-b, then d**, and close Cloud Shell. While the GPU is
    busy, the idle shutdown won't fire. To come back: `bash ctl.sh ssh`, then `tmux attach -t smoke`.
 3. When it prints **`DONE`**, print the summary and paste it to Claude:
@@ -144,6 +149,34 @@ Only after the smoke test is approved.
    ```
 3. It now runs on its own. It writes only to `gs://intersectionality-data/final_run/`.
 
+**Where everything is stored.** Each finished template-wording ("group": one template × one wording × one model,
+12,254 prompts) is moved to the bucket as soon as it is done, then its `.done` marker is written; a restart skips every
+group that has a marker. `m` is `granite`, `llama` or `mistral`; `PP` is the template 00–36; `W` the wording 0–3.
+
+| Path under `gs://intersectionality-data/final_run/` | What | Count at the end |
+|---|---|---|
+| `activations/model={m}/layer={LL}/p{PP}_w{W}.npz` | last-token activations, one layer of one group, ~100 MB | 15,392 files, ~1.55 TB |
+| `readout/model={m}/p{PP}_w{W}.npz` | P(yes) / P(no) per prompt | 444 |
+| `done/model={m}/p{PP}_w{W}.done` | extraction resume marker (prompt count, token-id digest, timing, host) | 444 |
+| `generations/model={m}/p{PP}_w{W}.jsonl.gz` | answer + reasoning per prompt | 444 |
+| `done_generate/model={m}/p{PP}_w{W}.done` | generation resume marker | 444 |
+| `run_info/model={m}.json`, `run_info/generate_model={m}.json` | versions, model revisions, input hashes | 6 |
+| `checks/disagreements_model={m}.csv` | rows where the generated yes/no disagrees with P(yes) | up to 3 |
+| `logs/run_*.log`, `logs/run_*.log.check` | the full-run log of each boot, uploaded when the run ends or fails | 1 per boot |
+| `_preflight/` | probe files written and deleted by every preflight; normally empty | 0 |
+
+Progress at any time: `bash ctl.sh bucket` (total size), or count markers from Cloud Shell:
+```bash
+gcloud storage ls "gs://intersectionality-data/final_run/done/**" | wc -l
+gcloud storage ls "gs://intersectionality-data/final_run/done_generate/**" | wc -l
+```
+Both reach 444 when the run is complete.
+
+The smoke test uses the same layout under `gs://intersectionality-data/smoke/` (only template 00 wording 0, plus template 01
+wordings 0–1 of granite for the resume test). On the VM, the full run works in `~/intersectional-bias/final_run/outputs/`
+(files leave for the bucket as they finish), the smoke test in `outputs_smoke/`, logs in `~/run_logs/` and `~/smoke.log`,
+and the downloaded models in `~/.cache/huggingface/`. Nothing on the VM is needed once it is in the bucket.
+
 **When the stop-alert email arrives (or once a day anyway), from Cloud Shell** (`cd ~/intersectional-bias/final_run/vm` first):
 
 | You see | Do |
@@ -154,7 +187,8 @@ Only after the smoke test is approved.
 | the log ends with `=== FINISHED` | done. Go to F |
 | the log ends with `exit status` ≠ 0 and no FINISHED | **don't restart.** Send Claude the log: `bash ctl.sh log` |
 
-`bash ctl.sh bucket` shows how much has been uploaded (~1.55 TB at the end).
+`bash ctl.sh log` reads the bucket copy of the log, which the VM refreshes every 2 minutes, so it works whether the
+VM is running or stopped. `bash ctl.sh bucket` shows how much has been uploaded (~1.55 TB at the end).
 
 ## F. After the run
 
@@ -170,7 +204,7 @@ Only after the smoke test is approved.
    bash ctl.sh delete    # removes the VM, its disk and the stop alert; the bucket is untouched
    bash ctl.sh status    # both lists must be empty
    ```
-4. Then revoke the `final-run-vm` token on Hugging Face (Settings → Access Tokens).
+4. Then revoke the VM's token on Hugging Face (Settings → Access Tokens; the one entered during setup is named `Intersectionality-Run-VM`).
 
 ## Troubleshooting
 
