@@ -26,8 +26,11 @@ done
 sudo apt-get update -qq && sudo apt-get install -y -qq tmux unzip curl >/dev/null
 
 echo "== 3/7 Python 3.11 (same as the Mac) via uv"
-command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
+# A preemption during the install can leave uv as an empty file that "runs" and does nothing
+# (seen 2026-10-08) -- and an empty file even exits 0 -- so uv is trusted only if it prints its
+# version; otherwise it is (re)installed.
+[[ -n "$(uv --version 2>/dev/null)" ]] || { rm -f "$HOME/.local/bin/uv" "$HOME/.local/bin/uvx"; curl -LsSf https://astral.sh/uv/install.sh | sh; }
 uv python install 3.11
 
 echo "== 4/7 environments (~10 min)"
@@ -36,8 +39,9 @@ make_env() {   # NAME REQUIREMENTS "modules": create ~/venvs/NAME if missing, in
                # files that pip still considers installed, so a broken env is rebuilt once from scratch.
   local name=$1 req=$2 mods=$3 venv=~/venvs/$1 attempt
   for attempt in 1 2; do
-    [[ -x "$venv/bin/python" ]] || uv venv --python 3.11 --seed "$venv"
-    "$venv/bin/pip" install -q -r "$req"
+    # (re)create the venv unless its pip answers: a preemption can leave python without pip (2026-10-08)
+    [[ -n "$("$venv/bin/pip" --version 2>/dev/null)" ]] || { rm -rf "$venv"; uv venv --python 3.11 --seed "$venv"; }
+    "$venv/bin/pip" install -q -r "$req" || echo "   pip install failed in $name; checking what imports"
     "$venv/bin/python" -c "import $mods" 2>/tmp/import_err.txt && return 0
     echo "   $name environment is broken: $(tail -1 /tmp/import_err.txt)"
     [[ $attempt == 1 ]] && { echo "   rebuilding it from scratch"; rm -rf "$venv"; }

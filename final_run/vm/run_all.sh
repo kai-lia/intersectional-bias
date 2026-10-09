@@ -13,6 +13,9 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 FINAL_RUN="$PWD"
 REMOTE="gcs:intersectionality-data/final_run"
+# vLLM's warm-up otherwise asks FlashInfer to compile a top-k/top-p sampling kernel on the fly, which needs
+# `ninja` (not on the image) -- and greedy decoding never uses that kernel (smoke test, 2026-10-08).
+export VLLM_USE_FLASHINFER_SAMPLER=0
 
 if [[ "${1:-}" == "--install" ]]; then
   sudo tee /etc/systemd/system/final-run.service >/dev/null <<EOF

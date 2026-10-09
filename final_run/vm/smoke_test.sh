@@ -27,6 +27,7 @@ GEN=~/venvs/generate/bin/python
 OUT=outputs_smoke
 REMOTE=gcs:intersectionality-data/smoke
 MODELS=(granite llama mistral)
+export VLLM_USE_FLASHINFER_SAMPLER=0                 # see run_all.sh: no on-the-fly kernel compile for a kernel greedy decoding never uses
 LOG=~/smoke.log                                      # written by the tee above (or by `... | tee ~/smoke.log`)
 LOG_REMOTE="$REMOTE/logs/smoke_$(date -u +%Y%m%d_%H%M%S).log"
 sudo touch /run/final_run_busy                       # idle shutdown stays off while this runs

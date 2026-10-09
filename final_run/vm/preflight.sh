@@ -36,9 +36,16 @@ rclone cat "$probe" >/dev/null 2>&1 || fail "cannot read back from $REMOTE"
 rclone deletefile "$probe" 2>/dev/null || fail "cannot delete in $REMOTE"
 ok "bucket write/read/delete"
 
-# 4. Hugging Face: logged in, pinned models reachable (cache first, network only if needed)
-[[ -n "$DRYRUN" ]] || $EX - <<'EOF' || fail "Hugging Face token or model access"
+# 4. model cache not damaged: a VM that loses power mid-download (spot preemption) leaves 0-byte files
+#    that only fail later, when the model loads (seen 2026-10-08: mistral's tokenizer_config.json)
+hub=~/.cache/huggingface/hub
+empty=$(find "$hub" -type f -size 0 -not -path '*/.locks/*' -not -path '*/.no_exist/*' 2>/dev/null | head -3)
+[[ -z "$empty" ]] || fail "0-byte files in $hub (a download cut short by a preemption); delete that model's models--* folder and rerun: $empty"
+
+# 5. Hugging Face: logged in, pinned models reachable (cache first, network only if needed), tokenizers load
+[[ -n "$DRYRUN" ]] || $EX - <<'EOF' || fail "Hugging Face token, model access, or a damaged tokenizer in ~/.cache/huggingface/hub (delete that model's folder)"
 from huggingface_hub import whoami, hf_hub_download
+from transformers import AutoTokenizer
 import extract as fr
 whoami()
 for m, repo in fr.MODEL_IDS.items():
@@ -46,17 +53,18 @@ for m, repo in fr.MODEL_IDS.items():
         hf_hub_download(repo, "config.json", revision=fr.MODEL_REVISIONS[m], local_files_only=True)
     except Exception:
         hf_hub_download(repo, "config.json", revision=fr.MODEL_REVISIONS[m])
+    AutoTokenizer.from_pretrained(repo, revision=fr.MODEL_REVISIONS[m])
 EOF
-[[ -n "$DRYRUN" ]] || ok "Hugging Face token valid; all three pinned models reachable"
+[[ -n "$DRYRUN" ]] || ok "Hugging Face token valid; all three pinned models reachable; tokenizers load"
 
-# 5. inputs untouched, code committed and current
+# 6. inputs untouched, code committed and current
 (cd inputs && sha256sum -c --quiet SHA256SUMS) || fail "inputs/ do not match SHA256SUMS"
 [[ -z "$(git status --porcelain -- . ':!outputs*')" ]] || fail "uncommitted changes in final_run/ (run_info would record the wrong commit)"
 git fetch -q origin final-run 2>/dev/null && [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/final-run)" ]] \
   || echo "  WARNING: HEAD is not origin/final-run (git pull?)"
 ok "inputs match checksums; working tree clean at $(git rev-parse --short HEAD)"
 
-# 6. room on the boot disk
+# 7. room on the boot disk
 free_gb=$(df -BG --output=avail "$HOME" | tail -1 | tr -dc 0-9)
 need_gb=60; [[ -n "$DRYRUN" ]] && need_gb=20      # the dry-run VM has a 100 GB disk; the A100 has 250 GB
 [[ "$free_gb" -ge "$need_gb" ]] || fail "only ${free_gb} GB free on the boot disk (need >= $need_gb for models and in-flight groups)"

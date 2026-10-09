@@ -16,15 +16,15 @@ installing on the Mac.
 - **Idle shutdown:** the VM shuts down after ~30 min with no GPU job and nobody logged in (paused while a run is active).
 - **Full run:** shuts the VM down when finished or if a step fails.
 - **Stop alert:** an email ~10 min after the VM stops for any reason (section B.2), so an interrupted run is never left idle for long.
-- **Preflight:** the full run and the smoke test refuse to start unless the GPU, both environments, the bucket, the Hugging Face token, the inputs and the disk all check out.
+- **Preflight:** the full run and the smoke test refuse to start unless the GPU, both environments, the bucket, the model cache, the Hugging Face token, the inputs and the disk all check out.
 - **Budget alerts:** at $125 / $250 / $375 / $500, arriving a few hours late.
 
 Scripts are in `final_run/vm/`:
 
 | Script | Runs in | Purpose |
 |---|---|---|
-| `ctl.sh` | Cloud Shell | dryrun / create / ssh / status / start / stop / log / bucket / alert / delete |
-| `preflight.sh` | VM | sanity checks before any GPU time: GPU, both environments, bucket, Hugging Face, inputs, disk |
+| `ctl.sh` | Cloud Shell | dryrun / create / ssh / status / start / stop / log / smokelog / bucket / alert / delete |
+| `preflight.sh` | VM | sanity checks before any GPU time: GPU, both environments, bucket, model cache, Hugging Face, inputs, disk |
 | `setup_vm.sh` | VM | Python, both environments, rclone, idle shutdown, Hugging Face login |
 | `smoke_test.sh` | VM | the Phase 3 checks + a measured time and cost estimate |
 | `run_all.sh` | VM | the full run; starts on every boot and resumes |
@@ -93,19 +93,25 @@ bash ctl.sh create
    ```
    The first time, it asks to create an SSH key. Press **Enter** at every question (no passphrase).
    If it asks *"install Nvidia driver?"*, answer **y**.
-2. On the VM (the prompt changes to `…@final-run-a100`):
+   **Pasting:** one line at a time, and only after the prompt shows `@final-run-a100` (Cloud Shell has its
+   own tmux, so `tmux new` typed there fails with *nested with care*). A long line can wrap into two
+   commands; type it instead. Never paste a transcript: every line of it runs as a command.
+2. On the VM (the prompt changes to `…@final-run-a100`), inside `tmux` so a dropped connection doesn't kill the setup:
    ```bash
+   tmux new -s setup
    git clone -b final-run https://github.com/kai-lia/intersectional-bias.git
    cd ~/intersectional-bias/final_run
    bash vm/setup_vm.sh
    ```
+   If the connection drops: `bash ctl.sh ssh`, then `tmux attach`.
 3. At step 7/7 it asks for the Hugging Face token. Paste the **final-run-vm** token from your
    password manager (nothing shows while you paste), press Enter, and answer **n** to the git question.
 4. It must end with three `access ok:` lines and **`SETUP COMPLETE`**. If not, paste the error to Claude.
 
 ## D. Smoke test (~1.5–2 h, ~$4–5)
 
-1. On the VM, start a `tmux` session so the test survives a dropped connection:
+1. On the VM, inside `tmux` so the test survives a dropped connection (skip the first line if you are
+   still in the `tmux` session from C):
    ```bash
    tmux new -s smoke
    cd ~/intersectional-bias/final_run
@@ -116,7 +122,7 @@ bash ctl.sh create
    It writes to `outputs_smoke/` on the VM and `gs://intersectionality-data/smoke/` in the bucket, never to the real
    `final_run/` prefix. Delete the smoke data afterwards from Cloud Shell: `gcloud storage rm -r gs://intersectionality-data/smoke`.
 2. You can watch it, or detach with **Ctrl-b, then d**, and close Cloud Shell. While the GPU is
-   busy, the idle shutdown won't fire. To come back: `bash ctl.sh ssh`, then `tmux attach -t smoke`.
+   busy, the idle shutdown won't fire. To come back: `bash ctl.sh ssh`, then `tmux attach`.
 3. When it prints **`DONE`**, print the summary and paste it to Claude:
    ```bash
    grep -E "====|PASS|FAIL|preflight passed|min cosine|prompts in|done in|hit cap|token ids|disagreement|already done|activation files|GPU-hours|FULL RUN|vLLM version|Error|Traceback" ~/smoke.log
@@ -130,7 +136,7 @@ bash ctl.sh create
 
 Claude then reviews the numbers, pins the vLLM version, and updates the budget for a go/no-go decision.
 
-## E. Full run (~3–5 days on one GPU)
+## E. Full run (~46 GPU-hours ≈ 2 days measured in the smoke test; longer with preemptions)
 
 Only after the smoke test is approved.
 
@@ -182,7 +188,7 @@ and the downloaded models in `~/.cache/huggingface/`. Nothing on the VM is neede
 | You see | Do |
 |---|---|
 | `bash ctl.sh status` shows `RUNNING` | fine. `bash ctl.sh log` shows progress and the ETA |
-| the stop-alert email arrived, or `status` shows `TERMINATED`, and the run isn't finished | `bash ctl.sh start`. It resumes by itself |
+| the stop-alert email arrived, or `status` shows `TERMINATED`, and the run isn't finished | `bash ctl.sh log` to see where it stopped (works while stopped), then `bash ctl.sh start`. It resumes by itself |
 | `start` fails with a capacity error | try again later. Nothing is lost |
 | the log ends with `=== FINISHED` | done. Go to F |
 | the log ends with `exit status` ≠ 0 and no FINISHED | **don't restart.** Send Claude the log: `bash ctl.sh log` |
@@ -220,5 +226,7 @@ VM is running or stopped. `bash ctl.sh bucket` shows how much has been uploaded 
 | `create` says the image family was not found and the fallback also fails | paste it to Claude; the VM can be built from a plain Ubuntu image with the driver installed by `setup_vm.sh` |
 | `setup_vm.sh` prints `WARNING: transformers … vs …` | the pins in `requirements-generate.txt` did not take; paste the setup output to Claude |
 | `smoke_test.sh` stops at step 2 with a vLLM error | paste it to Claude; vLLM runs for the first time here |
+| vLLM fails at start with `No such file or directory: 'ninja'` | FlashInfer trying to compile a sampling kernel that greedy decoding never uses. The scripts set `VLLM_USE_FLASHINFER_SAMPLER=0`; when running `generate.py` by hand, `export` it first |
+| after a preemption something is oddly broken: `pip: No such file`, `uv` prints nothing, `JSONDecodeError: Expecting value` when a model loads, vLLM cannot load a compiled graph | a file that was being written when the power was cut is empty or cut short. `setup_vm.sh` and `preflight.sh` catch the common cases and say what to delete; otherwise delete what was being loaded (`rm -rf ~/venvs` and rerun setup; the model's `~/.cache/huggingface/hub/models--*` folder; `~/.cache/vllm`) and rerun |
 | `PREFLIGHT FAILED: …` | the message names the broken piece (GPU, environment, bucket, token, inputs, disk); fix that and rerun. Nothing was spent |
 | `generate.py` exits with `prompt token ids differ from extract.py's` | the two environments tokenize differently; nothing was generated. Paste it to Claude |
