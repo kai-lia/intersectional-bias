@@ -6,7 +6,8 @@
 #                              the bucket checks and the stop alert, then is stopped with the real stop flag;
 #                              rerunning it resumes (restarts the VM if it was preempted)
 #   bash ctl.sh dryrun-cleanup delete the dry-run VM and its alert (after the alert email arrived)
-#   bash ctl.sh create         create the spot A100 VM (tries each us-central1 zone that has A100 80GB)
+#   bash ctl.sh create [ZONE...]  create the spot A100 VM, trying us-east4-c, us-east5-a, us-east5-b in turn
+#                              (or the zones given, e.g. `create us-central1-a us-central1-c` for the crowded region)
 #   bash ctl.sh alert EMAIL    email EMAIL whenever the A100 VM stops (preemption, 48 h limit, finished, by hand)
 #   bash ctl.sh ssh            open a terminal on the VM
 #   bash ctl.sh status         VM state + what is still billing
@@ -25,7 +26,10 @@ SA="code-runner@intersectionality-compute.iam.gserviceaccount.com"
 BUCKET="gs://intersectionality-data"
 REPO="https://github.com/kai-lia/intersectional-bias.git"
 MAX_RUN="48h"          # each start of the A100 VM may run at most this long, then it stops itself
-ZONES=(us-central1-a us-central1-c)     # us-central1 zones with A2 Ultra (A100 80GB); b does not offer it despite the docs
+# Zones with the A100 80GB machine (a2-ultragpu-1g) and quota, by preference. us-central1-a/c also have it, but
+# three preemptions in ~2 h of running there (2026-10-08) made it the explicit fallback: `create us-central1-a us-central1-c`.
+# The bucket stays in us-central1: sending the run's ~1.55 TB there from us-east costs ~$15-30 once.
+ZONES=(us-east4-c us-east5-a us-east5-b)
 IMAGE_PROJECT="deeplearning-platform-release"
 IMAGE_FAMILY="common-cu129-ubuntu-2204-nvidia-580"    # Google Deep Learning VM: driver 580 preinstalled
 
@@ -172,12 +176,14 @@ dryrun-cleanup)
   ;;
 create)
   exists "$NAME" && { echo "$NAME already exists (zone $(zone_of "$NAME")). Use 'start', or 'delete' first."; exit 1; }
+  [[ $# -gt 1 ]] && ZONES=("${@:2}")
   if create_vm "$NAME" a2-ultragpu-1g 250 "$MAX_RUN" --metadata=install-nvidia-driver=True; then
     echo; echo "Created $NAME in $(zone_of "$NAME"). The GPU is billing from now on. Wait ~2 minutes, then: bash ctl.sh ssh"
     exit 0
   fi
   echo; echo "No zone could create the VM. If every error above says ZONE_RESOURCE_POOL_EXHAUSTED or"
-  echo "'does not have enough resources', no spot A100 80GB is free right now: try again in 15-30 min."
+  echo "'does not have enough resources', no spot A100 80GB is free right now: try again in 15-30 min,"
+  echo "or try the crowded region: bash ctl.sh create us-central1-a us-central1-c"
   echo "Any other error: paste it to Claude."; exit 1
   ;;
 alert)  make_alert "$NAME" "${2:?usage: bash ctl.sh alert you@example.com}" ;;
@@ -198,5 +204,5 @@ delete)
   delete_alert "$NAME"
   echo "== anything left?"; gcloud compute instances list; gcloud compute disks list
   ;;
-*) sed -n '2,18p' "$0"; exit 1 ;;
+*) sed -n '2,19p' "$0"; exit 1 ;;
 esac

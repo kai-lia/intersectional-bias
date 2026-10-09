@@ -6,10 +6,10 @@ installing on the Mac.
 
 | | |
 |---|---|
-| GPU project | `intersectionality-compute` (1× A100 80GB **spot**, us-central1) |
-| Bucket | `gs://intersectionality-data` (project `intersectionality-510622`) |
-| VM | `final-run-a100`, `a2-ultragpu-1g`, 250 GB disk, runs as `code-runner` (bucket access only, no key file) |
-| Cost | ~$2.50/h while the VM is RUNNING; ~$0.85/day for the disk while it exists |
+| GPU project | `intersectionality-compute` (1× A100 80GB **spot**; quota in us-east4, us-east5 and us-central1) |
+| Bucket | `gs://intersectionality-data` (project `intersectionality-510622`, us-central1) |
+| VM | `final-run-a100`, `a2-ultragpu-1g`, 250 GB disk, runs as `code-runner` (bucket access only, no key file). Created in us-east4-c / us-east5-a / us-east5-b; us-central1 only on request (three preemptions in ~2 h there on 2026-10-08) |
+| Cost | ~$2.50/h while the VM is RUNNING; ~$0.85/day for the disk while it exists; ~$15–30 once for sending the run's ~1.55 TB from us-east to the bucket |
 
 **Safety nets built in:**
 - **48 h limit:** each start of the VM may run at most 48 h, then it stops itself.
@@ -35,8 +35,9 @@ Scripts are in `final_run/vm/`:
 
 ## Before you start: two quota rows to check (1 min)
 
-In **Intersectionality-compute → IAM & Admin → Quotas & System Limits**, filter by `us-central1` and confirm:
-- **Preemptible NVIDIA A100 80GB GPUs** = 1 (done)
+In **Intersectionality-compute → IAM & Admin → Quotas & System Limits**, filter by the region the VM will be
+created in (`us-east4`, `us-east5`, or `us-central1`) and confirm:
+- **Preemptible NVIDIA A100 80GB GPUs** = 1 (done for all three regions, 2026-10-08)
 - **Persistent Disk SSD (GB)** ≥ 250 (the boot disk; new projects usually get 500+). If it's lower, request 500.
 - **Local SSD (GB)** and, if listed, **Preemptible Local SSD (GB)** ≥ 375 (the A100 machine comes with one; the dry run uses one too).
 
@@ -73,9 +74,11 @@ bash ctl.sh dryrun you@example.com
 ```bash
 bash ctl.sh create
 ```
-- It uses Google's Deep Learning VM image (NVIDIA driver 580 preinstalled) and tries zones a and c; b and f have no A100 80GB.
-- Success ends with `Created final-run-a100 in us-central1-x`. **The GPU is now billing.**
-- `No zone had a spot A100 80GB available`: no capacity right now. Wait 15–30 min and run it again.
+- It uses Google's Deep Learning VM image (NVIDIA driver 580 preinstalled) and tries us-east4-c, us-east5-a and
+  us-east5-b in turn (the zones with the A100 80GB machine and quota). To try the crowded us-central1 instead:
+  `bash ctl.sh create us-central1-a us-central1-c`.
+- Success ends with `Created final-run-a100 in <zone>`. **The GPU is now billing.**
+- `No zone could create the VM`: no capacity right now. Wait 15–30 min and run it again.
 - Any other error: paste it to Claude.
 
 2. **Create the stop alert** (once; same address as the dry run):
