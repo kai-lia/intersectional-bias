@@ -15,7 +15,7 @@ installing on the Mac.
 - **48 h limit:** each start of the VM may run at most 48 h, then it stops itself.
 - **Idle shutdown:** the VM shuts down after ~30 min with no GPU job and nobody logged in (paused while a run is active).
 - **Full run:** shuts the VM down when finished or if a step fails.
-- **Stop alert:** an email ~10 min after the VM stops for any reason (section B.2), so an interrupted run is never left idle for long.
+- **Stop alert:** an email within about an hour of the VM stopping, for any reason (section B.2), so an interrupted run is never left idle for long. It is also how you learn the run has **finished** (the VM stops itself).
 - **Preflight:** the full run and the smoke test refuse to start unless the GPU, both environments, the bucket, the model cache, the Hugging Face token, the inputs and the disk all check out.
 - **Budget alerts:** at $125 / $250 / $375 / $500, arriving a few hours late.
 
@@ -85,8 +85,11 @@ bash ctl.sh create
    ```bash
    bash ctl.sh alert you@example.com
    ```
-   From now on you get an email about 10 minutes after the A100 VM stops, whatever the reason, and another when it
-   runs again. A stop you did yourself also emails you; that's a useful confirmation that the GPU is off.
+   From now on you get an email titled *[ALERT …] final-run-a100 reported no uptime for 10 minutes* after the A100 VM
+   stops, whatever the reason (preemption, the 48 h limit, the run finished, or you stopped it), and another when it runs
+   again. In practice it arrives **15–60 minutes** after the stop (measured: 40 min), not 10. The alert watches the VM
+   **by name**, so after a VM is deleted and recreated elsewhere, Monitoring may still send one or two emails about the
+   old one: read the `zone=` label in the email and ignore zones the VM no longer lives in.
 
 ## C. Set up the VM (~15 min, once)
 
@@ -186,7 +189,8 @@ wordings 0–1 of granite for the resume test). On the VM, the full run works in
 (files leave for the bucket as they finish), the smoke test in `outputs_smoke/`, logs in `~/run_logs/` and `~/smoke.log`,
 and the downloaded models in `~/.cache/huggingface/`. Nothing on the VM is needed once it is in the bucket.
 
-**When the stop-alert email arrives (or once a day anyway), from Cloud Shell** (`cd ~/intersectional-bias/final_run/vm` first):
+**When the stop-alert email arrives (or once a day anyway), from Cloud Shell** (`cd ~/intersectional-bias/final_run/vm` first).
+The email is the same whether the run finished, was preempted, hit the 48 h limit, or failed; `bash ctl.sh log` tells which:
 
 | You see | Do |
 |---|---|

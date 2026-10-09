@@ -116,7 +116,7 @@ make_alert() {         # VMNAME EMAIL: email when the VM reports no uptime for 1
 }
 JSONEOF
   gcloud monitoring policies create --policy-from-file=/tmp/final_run_alert.json >/dev/null
-  echo "Alert created: $email gets an email ~10 minutes after $vm stops, for any reason (and one when it runs again)."
+  echo "Alert created: $email gets an email within ~an hour of $vm stopping, for any reason (and one when it runs again)."
 }
 
 delete_alert() {       # VMNAME

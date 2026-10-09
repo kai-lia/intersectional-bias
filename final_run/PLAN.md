@@ -1,6 +1,6 @@
 # Final Run Plan: Activations, Reasoning, Tagging, Analysis
 
-*Last updated 2026-10-04. A living plan: when a decision is made or a number is measured, edit it here.*
+*Last updated 2026-10-09. A living plan: when a decision is made or a number is measured, edit it here.*
 
 ---
 
@@ -98,7 +98,28 @@ every edit made to them.
   - ~5 GB per batch of unused next-token scores
   - the answer parser could misread
   - generation metadata wasn't uploaded
-- **Never tested:** CUDA, vLLM, rclone upload and resume. These run for the first time in the smoke test.
+- CUDA, vLLM, rclone upload and resume ran for the first time in the cloud smoke test (3.6).
+
+### 3.6 Cloud smoke test (A100 80GB spot, 2026-10-08)
+
+- **Vectors match the Mac:** min cosine ≥ 0.9996 at early, middle and late layers for all three models; |ΔP(yes)| ≤ 0.002.
+- **Length sample (1000 prompts, uncapped):** 512 tokens fit 100% (mistral: mean 84, p99 273, max 357). In the full
+  template-wording, cap hits were 2 / 1 / 1 of 12,254 (granite / llama / mistral).
+- **Token ids are identical** between `extract.py` and `generate.py` (digest check), inputs match the frozen hashes, rows align.
+- **Agreement between the generated yes/no and P(yes):** granite 98.87%, llama 99.36%, mistral 99.19%. Granite is just
+  under the 99% target; among its 139 disagreeing rows the largest |P(yes) − P(no)| is 0.24 and most are far smaller, i.e.
+  they sit where the two answers are close. Two expected causes: bf16 kernel differences between `transformers` and vLLM,
+  and P(yes) summing several spellings while greedy decoding picks one token. Accepted; **P(yes) is the primary behavioral
+  readout, the generated answer the secondary.**
+- **Mistral gave no reasoning for 45.4%** of template 0's prompts (29.8% in the random 1000-prompt sample): it varies by
+  template. Report per template; see Phase 5.
+- **Resume after a hard kill:** 80 / 80 activation files in the bucket, no duplicates.
+- **Spot preemptions in us-central1-a:** three in ~2 h of running (after 5, 31 and 76 min) plus stockouts. The full run
+  therefore runs in **us-east4-c** (quota also approved for us-east5; both offer the A100 80GB machine, us-central1 is the
+  explicit fallback). Files written at the moment of a preemption can be left empty (seen: `uv`, a venv's `pip`, two model
+  files); `setup_vm.sh` and `preflight.sh` now detect and repair or report that.
+- **vLLM 0.23.0** is pinned; its warm-up wants FlashInfer to JIT-compile a sampling kernel (needs `ninja`), which greedy
+  decoding never uses: disabled with `VLLM_USE_FLASHINFER_SAMPLER=0`.
 
 ---
 
@@ -134,24 +155,26 @@ GCE GPU VM (spot, A100 80GB or H100) ──rclone──▶ GCS bucket (single re
 
 ---
 
-## 5. Budget (estimates, to be replaced by smoke-test measurements)
+## 5. Budget (measured in the cloud smoke test, 2026-10-08; Option A, spot A100 80GB at ~$2.50/h)
 
-| Item | GPU-hours | Option A (GCE spot + GCS) | Option B (Vast + R2) |
-|---|---|---|---|
-| Smoke test + length sample | 2–5 | $5–15 | $5–10 |
-| Activation pass | 10–30 (A100) | $20–80 | $15–55 |
-| Reasoning (vLLM) | 40–75 (A100) | $70–200 | $50–135 |
-| Outcome tagging (see Phase 5) | 0–60 | $0–150 | $0–110 |
-| Upload / bandwidth fees | | $0 (ingress free) | $0–30 |
-| Buffer (~25%) | | $25–110 | $20–85 |
-| **One-time total** | | **~$120–555** | **~$90–425** |
-| Storage | | ~$31/mo | ~$23/mo (R2) or ~$9/mo (B2) |
-| Analysis compute | | ~$5–20/mo | ~$5–20/mo |
-| **12-month total** | | **~$550–1,160** | **~$260–940** |
+| Item | GPU-hours | Cost |
+|---|---|---|
+| Smoke test (several attempts, incl. two preempted ones and the VM setups) | ~3 | ~$8 (spent) |
+| Activation pass: 148 groups × (90 + 95 + 72) s | 10.6 | ~$26 |
+| Reasoning (vLLM): 148 groups × (245 + 470 + 143) s | 35.3 | ~$88 |
+| Restarts after spot preemptions (boot, preflight, lost partial group ≈ 5–8 min each) | +10–30% | ~$12–35 |
+| Transfer: VM in us-east4 → bucket in us-central1, ~1.55 TB once | | ~$15–30 |
+| Outcome tagging (see Phase 5) | 0–60 | $0–150 |
+| **One-time total** | **~49–60** | **~$150–340** |
+| Storage | | ~$31/mo |
+| Analysis compute | | ~$5–20/mo |
+
+Per-group times (granite / llama / mistral): extraction 90 / 95 / 72 s at batch 128; generation 245 / 470 / 143 s
+(greedy, cap 512). Full run ≈ 46 GPU-hours ≈ 1.9 days of continuous running.
 
 Notes:
-- H100 instead of A100 is ~2× faster at ~1.5–2× the price: similar cost, half the wall-clock time.
-- On-demand Google Cloud GPUs (~$5/hr for an A100) would roughly triple Option A's GPU lines.
+- Before the measurement the estimate was 50–105 GPU-hours ($120–555 one-time); the Vast.ai alternative (Option B) is no longer needed.
+- On-demand A100s (roughly twice the spot price, never preempted) remain the fallback if preemptions make spot unworkable.
 - Keeping only key layers after analysis settles (Phase 7) cuts storage roughly in proportion.
 
 ---
@@ -198,20 +221,19 @@ All of the checks below are scripted in `vm/smoke_test.sh`; follow `RUNBOOK.md` 
 
 On one GPU VM with ~200 GB disk, in the bucket's region, with **two Python environments** (`.venv-extract`, `.venv-generate`), inside `tmux`:
 
-- [ ] **Activations:**
-  - Run `extract.py --out outputs_smoke` on 1 template × 1 wording × all identities for one model.
-  - Record prompts/s and peak GPU memory at the auto batch size.
-- [ ] **Matches the Mac:** a few vectors line up with the local smoke test (cosine ≥ 0.999).
-- [ ] **Generation:**
-  - Run `generate.py --sample 1000` per model, uncapped.
-  - Record length distribution, tokens/s and has-reasoning rate.
-  - Confirm 512 still fits ≥ 99.5%.
-- [ ] **Upload:** `--remote` moves files to the bucket and deletes them locally, then `rclone check` passes.
-- [ ] **Resume:** kill a run mid-group, restart it, and confirm it continues correctly.
-- [ ] **Agreement:** `check.py` on the smoke output shows ≥ 99% agreement between generated yes/no and P(yes).
-- [ ] **Update Section 5** with measured numbers, and decide go or no-go.
+Done 2026-10-08 (results in 3.6):
+- [x] **Activations:** one template-wording per model at the auto batch size (128): 90 / 95 / 72 s per 12,254 prompts.
+- [x] **Matches the Mac:** cosine ≥ 0.9996.
+- [x] **Generation:** 1000 uncapped prompts per model; 512 fits 100%; e.g. mistral ~4,960 tokens/s.
+- [x] **Upload:** `--remote` moves each finished group to the bucket; counts verified by `check.py` and the resume test.
+- [x] **Resume:** hard kill mid-group, restart, 80 / 80 files, no duplicates.
+- [x] **Agreement:** 98.9–99.4% (granite just under 99%, near-ties; accepted, see 3.6).
+- [x] **Section 5 updated;** decision: **go** (2026-10-09).
 
 ### Phase 4: Full run
+
+Started 2026-10-09 01:37 UTC on `final-run-a100` in us-east4-c (commit `4f408c8`), as the `final-run` boot service
+(`vm/run_all.sh`): extract → generate → check, resuming after every preemption. Progress: `bash ctl.sh log`.
 
 - [ ] **Activations:** `extract.py --remote …` for all three models. Watch the ETA and the bucket growth.
 - [ ] **Reasoning:** `generate.py --remote …`, one process per model, run automatically.

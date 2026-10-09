@@ -70,7 +70,8 @@ until [[ -f "$OUT/resume/done/model=granite/p01_w0.done" ]]; do
   sleep 10
 done
 sleep 15                                   # first group's upload is in flight, second is computing
-kill -9 "$pid"; wait "$pid" 2>/dev/null || true
+kill -9 "$pid" 2>/dev/null || echo "(nothing to kill: both groups were already in the bucket from an earlier run, so this is only a re-check)"
+wait "$pid" 2>/dev/null || true
 pkill -9 -f "rclone move" || true; sleep 2            # a real preemption kills the upload too
 echo "killed mid-run (like a spot interruption); files left locally: $(find "$OUT/resume" -name '*.npz' | wc -l)"
 echo "restarting the same command"
